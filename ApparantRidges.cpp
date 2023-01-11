@@ -92,17 +92,18 @@ int main()
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
-    models.push_back(Model(".\\models\\brain-simple-mesh.obj"));
-    models.push_back(Model(".\\models\\xyzrgp_dragon.obj"));
+    //models.push_back(Model(".\\models\\brain-simple-mesh.obj"));
+    models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
     models.push_back(Model(".\\models\\GolfBallOBJ.obj"));
 
     Model* currentModel = &models[0];
 
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
-    GLuint apparantRidges = loadShader(".\\shaders\\.vs", ".\\shaders\\.fs");
+    //GLuint apparantRidges = loadShader(".\\shaders\\.vs", ".\\shaders\\.fs");
    
-    GLuint* currentShader = &apparantRidges;
+    //GLuint* currentShader = &apparantRidges;
+    GLuint* currentShader = &diffuse;
 
     //view
     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.0f);
@@ -137,7 +138,7 @@ int main()
         ImGui::Begin("Apparant Ridges");
         ImGui::Checkbox("Line Drawing with Apparant Ridges", &ridgesOn);
 
-        const char* listboxItems[] = { "Bunny", "Lucy", "David", "Brain", "Dragon", "Golfball"};
+        const char* listboxItems[] = { "Bunny", "Lucy", "David", /*"Brain",*/ "Dragon", "Golfball"};
         static int currentlistboxItem = 0;
         ImGui::ListBox("Shading Method", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
@@ -152,7 +153,7 @@ int main()
         ImGui::End();
 
 
-        if (ridgesOn) { currentShader = &apparantRidges; } else { currentShader = &diffuse; }
+        //if (ridgesOn) { currentShader = &apparantRidges; } else { currentShader = &diffuse; }
 
         glUseProgram(*currentShader);
 

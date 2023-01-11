@@ -131,14 +131,14 @@ bool loadAssimp(
 	std::vector<glm::vec2> uvs;
 	std::vector<glm::vec3> normals;
 	Assimp::Importer importer;
-	printf("Loading file %s...\n", path);
+	printf("Loading file : %s...\n", path);
 	//aiProcess_Triangulate !!!
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf(stderr, importer.GetErrorString());
 		return false;
 	}
-	const aiMesh* mesh = scene->mMeshes[0]; // In this code we just use the 1rst mesh
+	const aiMesh* mesh = scene->mMeshes[0]; // In this code we just use the 1st mesh
 	// Fill vertices positions
 	//std::cout << "Number of vertices :" << mesh->mNumVertices << "\n";
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++) {

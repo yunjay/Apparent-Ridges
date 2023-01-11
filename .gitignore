@@ -49,3 +49,8 @@ include/imgui/imconfig.h
 x64/Debug/ApparantRidges.tlog/unsuccessfulbuild
 *.tlog
 *.log
+*.recipe
+*.ilk
+*.txt
+*.iobj
+*.ipdb
