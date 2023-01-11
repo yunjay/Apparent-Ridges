@@ -40,3 +40,12 @@
 *.vcxproj
 *.filters
 *.user
+*.ipch
+.vs/ApparantRidges/v17/.suo
+*.bin
+include/imgui/imconfig.h
+*.idb
+*.pdb
+x64/Debug/ApparantRidges.tlog/unsuccessfulbuild
+*.tlog
+*.log
