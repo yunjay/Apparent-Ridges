@@ -1,1 +1,1 @@
-# ApparantRidges
+# ApparentRidges
