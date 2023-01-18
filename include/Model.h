@@ -12,14 +12,18 @@ bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vecto
 
 class Model {
 public:
-	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO, maxPD, minPD, maxCurv, minCurv;
+	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO, maxPDBuffer, minPDBuffer, maxCurvBuffer, minCurvBuffer;
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
+	std::vector<glm::vec3> maxPDs;
+	std::vector<glm::vec3> minPDs;
+	std::vector<GLfloat> maxCurvs, minCurvs;
 	std::vector<unsigned int> indices;
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
 	GLfloat modelScaleFactor = 1.0f;
+	GLfloat minDistance;
 	glm::vec3 center = glm::vec3(0.0f);
 
 	bool isSet = false;
@@ -29,6 +33,7 @@ public:
 		this->path = path;
 		loadAssimp(this->path.data(), this->vertices, this->normals, this->indices );
 		this->boundingBox();
+		this->minDistance = this->getMinDistance();
 		this->setup();
 	}
 	void setup() {
@@ -41,10 +46,10 @@ public:
 
 		glGenBuffers(1, &EBO);
 
-		glGenBuffers(1, &maxPD);
-		glGenBuffers(1, &minPD);
-		glGenBuffers(1, &maxCurv);
-		glGenBuffers(1, &minCurv);
+		glGenBuffers(1, &maxPDBuffer);
+		glGenBuffers(1, &minPDBuffer);
+		glGenBuffers(1, &maxCurvBuffer);
+		glGenBuffers(1, &minCurvBuffer);
 
 		//VAO  
 		glBindVertexArray(VAO);
@@ -101,7 +106,7 @@ public:
 		return true;
 	}
 	void boundingBox() {
-		//Intuitive implemetation calculating model boundary box size
+		//simple implemetation calculating model boundary box size
 		float maxX = vertices[0].x, maxY = vertices[0].y, maxZ = vertices[0].z;
 		float minX = vertices[0].x, minY = vertices[0].y, minZ = vertices[0].z;
 		for (int i = 1; i < vertices.size(); i++) {
@@ -116,6 +121,38 @@ public:
 		this->center = glm::vec3((maxX + minX) / 2.0f, (maxY + minY) / 2.0f, (maxZ + minZ) / 2.0f);
 		this->diagonalLength = glm::length(glm::vec3(maxX - minX, maxY - minY, maxZ - minZ));
 		this->modelScaleFactor = 1.0f/diagonalLength;
+	}
+	float getMinDistance() {
+		float minDist = glm::length(vertices[0] - vertices[1]);
+		for (int i = 2; i < vertices.size(); i++) {
+			float dis = glm::length(vertices[i] - vertices[0]);
+			if (dis < minDist && dis>0.0f) minDist = dis;
+		}
+		return minDist;
+	}
+	//Calculates principal curvatures and principal directions per vertex
+	//Let's use a compute shader with a SSBO
+	void setupCurvatures() {
+		//generate ssbo to use in compute shader
+		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
+		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
+		GLuint ssbo;
+		glGenBuffers(1, &ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+
+
+		unsigned int verticesSize = this->vertices.size();
+		this->maxPDs.resize(verticesSize); this->minPDs.resize(verticesSize);
+		this->maxCurvs.resize(verticesSize); this->minCurvs.resize(verticesSize);
+
+
+		//kill ssbo
+		glDeleteBuffers(1,&ssbo);
+	}
+
+
+	~Model() {
+		glDeleteBuffers()
 	}
 };
 

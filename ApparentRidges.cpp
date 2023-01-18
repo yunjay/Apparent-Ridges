@@ -30,12 +30,14 @@ float yDegrees = 0.0f;
 float modelSize = 1.0f;
 float lightDegrees = 0.0f;
 glm::vec3 background(30.0 / 255, 30.0 / 255, 30.0 / 255);
-glm::vec3 textureHigh(1.0f);
-glm::vec3 textureLow(0.0f);
+glm::vec3 lineColor(1.0f);
 
 bool ridgesOn = true;
 int main()
 {
+    int lineWidth = 1;
+    float thresholdScale = 1.0f;
+
 
     // glfw: initialize and configure
     glfwInit();
@@ -48,7 +50,7 @@ int main()
 #endif
 
     // glfw window creation
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Apparant Ridges", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Apparent Ridges", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -69,7 +71,6 @@ int main()
     // configure global opengl state
     //z buffer
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(3);
 
     //IMGui init    
     IMGUI_CHECKVERSION();
@@ -100,7 +101,7 @@ int main()
 
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
-    //GLuint apparantRidges = loadShader(".\\shaders\\.vs", ".\\shaders\\.fs");
+    GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
    
     //GLuint* currentShader = &apparantRidges;
     GLuint* currentShader = &diffuse;
@@ -128,15 +129,15 @@ int main()
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-
+        glLineWidth(lineWidth);
         //IMGui new frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
 
         //IMGui window
-        ImGui::Begin("Apparant Ridges");
-        ImGui::Checkbox("Line Drawing with Apparant Ridges", &ridgesOn);
+        ImGui::Begin("Apparent Ridges");
+        ImGui::Checkbox("Line Drawing with Apparent Ridges", &ridgesOn);
 
         const char* listboxItems[] = { "Bunny", "Lucy", "David", /*"Brain",*/ "Dragon", "Golfball"};
         static int currentlistboxItem = 0;
@@ -146,14 +147,18 @@ int main()
         ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 10.0f);
-        ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);
+        ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
+        ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
+        //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);
+
         //ImGui::SliderFloat("Brightness", &diffuse, 0.0f, 2.0f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
+        ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
         ImGui::ColorEdit3("Background Color", (float*)&background, misc_flags);
         ImGui::End();
 
 
-        //if (ridgesOn) { currentShader = &apparantRidges; } else { currentShader = &diffuse; }
+        if (ridgesOn) { currentShader = &apparentRidges; } else { currentShader = &diffuse; }
 
         glUseProgram(*currentShader);
 
@@ -167,10 +172,6 @@ int main()
 
         //opengl matrice transforms are applied from the right side. (last first)
         glm::mat4 model = glm::mat4(1);
-        //model = glm::translate(model, glm::vec3(0,0.0, -1.0f));
-        //model = glm::translate(model, ((-1.0f) * 1.0f / modelScaleFactor) * cen + glm::vec3(0.0,-0.5,-1.0f));
-
-        //model = glm::translate(model, glm::vec3(0.0f, -0.5f, -1.0f));
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f));
         model = glm::scale(model, glm::vec3(modelSize, modelSize, modelSize));
         model = glm::rotate(model, glm::radians(yDegrees), glm::vec3(0.0f, 1.0f, 0.0f));
@@ -178,15 +179,19 @@ int main()
 
         model = glm::scale(model, glm::vec3(currentModel->modelScaleFactor) );
         model = glm::translate(model, (-1.0f * currentModel->center));
-        //glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0,0,-1), glm::vec3(0,1,0));
         glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "model"), 1, GL_FALSE, &model[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "view"), 1, GL_FALSE, &view[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
-
-        //printShader(bunny, contribution);
+        if (ridgesOn) {
+            glUniform3f(glGetUniformLocation(apparentRidges,"viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),currentModel->minDistance*thresholdScale);
+            glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
+            
+        }
+            
 
         currentModel->render(*currentShader);
 

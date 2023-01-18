@@ -1,13 +1,10 @@
 #version 430
 
-in vec3 Normal;
-in vec3 FragPos;
-in vec2 TexCoords;
-
 struct Light {
     vec3 position;
     vec3 diffuse;
 };
+
 
 out vec4 color;
 

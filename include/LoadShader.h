@@ -25,6 +25,7 @@ GLuint loadShader(const GLchar* vertexPath, const GLchar* fragmentPath) {
     catch (std::ifstream::failure e) {
         std::cout << "Shader failed to read\n";
     }
+    //stringstream to c string
     const GLchar* vertexShaderCode = vertexCode.c_str();
     const GLchar* fragmentShaderCode = fragmentCode.c_str();
 
@@ -155,5 +156,13 @@ GLuint loadShader(const GLchar* vertexPath, const GLchar* fragmentPath, const GL
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
     glDeleteShader(geometryShader);
+    return program;
+}
+GLuint loadComputeShader(const GLchar* computePath) {
+    GLuint program;
+    std::string computeCode;
+    std::ifstream computeShaderFile;
+    
+    program = glCreateProgram();
     return program;
 }
