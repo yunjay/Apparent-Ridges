@@ -14,7 +14,7 @@
 
 #include "loadShader.h"
 #include "Model.h"
-
+#include "computeShader.h"
 // settings
 const unsigned int SCR_WIDTH = 2400;
 const unsigned int SCR_HEIGHT = 1350;
@@ -39,6 +39,7 @@ int main()
     float thresholdScale = 1.0f;
 
 
+
     // glfw: initialize and configure
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -48,6 +49,7 @@ int main()
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
+
 
     // glfw window creation
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Apparent Ridges", NULL, NULL);
@@ -61,12 +63,15 @@ int main()
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    // glad: load all OpenGL function pointers]
+    // glad: load all OpenGL function pointers
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
+
+    //Print constants, must be done after loading GL pointers.
+    printComputeShaderSizes();
 
     // configure global opengl state
     //z buffer
@@ -102,7 +107,7 @@ int main()
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
     GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
-   
+
     //GLuint* currentShader = &apparantRidges;
     GLuint* currentShader = &diffuse;
 

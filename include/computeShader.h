@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 #include <glm/glm.hpp>
-
+using std::cout;
 GLuint loadComputeShader(const GLchar* computeShaderPath){
     GLuint program;
     std::string code;
@@ -50,45 +50,54 @@ GLuint loadComputeShader(const GLchar* computeShaderPath){
     return program;
 }
 
-//GL constants
-GLuint getMaxShaderStorageBlockSize(){
-    GLuint size;
-    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &size);
-    return size;
-}
-GLuint getMaxUniformBlockSize(){
-    GLuint size;
-    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &size);
-    return size;
-}
-GLuint getMaxComputeWorkGroupCount(int i){
+//GL constants -> MUST BE DONE AFTER LOADING GL POINTERS WITH GLAD / GLEW 
+GLint getMaxComputeWorkGroupCount(int i){
     if(i>2 || i<0) return 0;
-    GLuint size;
+    GLint size;
     //x,y,z -> 0 1 2
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, i, &size);
     return size;
 }
-GLuint getMaxComputeWorkGroupSize(int i){
+GLint getMaxComputeWorkGroupSize(int i){
     if(i>2 || i<0) return 0;
-    GLuint size;
+    GLint size;
     //x,y,z -> 0 1 2
     glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, i, &size);
     return size;
 }
-GLuint getMaxComputeWorkGroupInvocations(){
-    GLuint size;
+GLint getMaxComputeWorkGroupInvocations(){
+    GLint size;
     glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &size);
     return size;
 }
-GLuint getMaxComputeSharedMemorySize(){
-    GLuint size;
+GLint getMaxComputeSharedMemorySize(){
+    GLint size;
     glGetIntegerv(GL_MAX_COMPUTE_SHARED_MEMORY_SIZE, &size);
     return size;
 }
 // Max bindings (This should probably not be in this header but...)
-GLuint getMaxShaderStorageBufferBindings(){
+GLint getMaxShaderStorageBufferBindings(){
     //usually 90 or so ?
-    GLuint size;
+    GLint size;
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &size);
     return size;
+}
+GLint getMaxUniformBlockSize() {
+    GLint size;
+    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &size);
+    return size;
+}
+GLint getMaxShaderStorageBlockSize() {
+    GLint size;
+    glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &size);
+    return size;
+}
+void printComputeShaderSizes() {
+    cout << "Max Work Group count : " << getMaxComputeWorkGroupCount(0) << ", " << getMaxComputeWorkGroupCount(1) << ", " << getMaxComputeWorkGroupCount(2) << ".\n";
+    cout << "Max Work Group local size : " << getMaxComputeWorkGroupSize(0) << ", " << getMaxComputeWorkGroupSize(1) << ", " << getMaxComputeWorkGroupSize(2) << ".\n";
+    cout << "Max compute shader invocations : " << getMaxComputeWorkGroupInvocations() << "\n";
+    cout << "Max compute shader shared memory size : " << getMaxComputeSharedMemorySize() << "\n";
+    cout << "Max SSBO size : " << getMaxShaderStorageBlockSize() << "\n";
+    cout << "Max SSBO bindings : " << getMaxShaderStorageBufferBindings() << "\n";
+    cout << "Max UBO size : " << getMaxUniformBlockSize() << "\n";
 }

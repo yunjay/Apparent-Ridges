@@ -34,7 +34,7 @@ layout(binding = 11, std430) readonly buffer indexBuffer{
     int indices[];
 }
 
-uniform int size;
+uniform uint size;
 
 void main(){
     //Just shove it all into 1D? Our vertex information is in a 1D array so...

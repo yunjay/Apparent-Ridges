@@ -158,6 +158,7 @@ GLuint loadShader(const GLchar* vertexPath, const GLchar* fragmentPath, const GL
     glDeleteShader(geometryShader);
     return program;
 }
+/*
 GLuint loadComputeShader(const GLchar* computePath) {
     GLuint program;
     std::string computeCode;
@@ -166,3 +167,4 @@ GLuint loadComputeShader(const GLchar* computePath) {
     program = glCreateProgram();
     return program;
 }
+*/

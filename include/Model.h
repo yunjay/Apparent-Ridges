@@ -8,11 +8,14 @@
 #include <assimp/Importer.hpp>      
 #include <assimp/scene.h>          
 #include <assimp/postprocess.h>     
+
+#include "computeShader.h"
 bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
 
 class Model {
 public:
-	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO, maxPDBuffer, minPDBuffer, maxCurvBuffer, minCurvBuffer;
+	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO;
+	GLuint PDBuffer, CurvatureBuffer;
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
@@ -25,7 +28,7 @@ public:
 	GLfloat modelScaleFactor = 1.0f;
 	GLfloat minDistance;
 	glm::vec3 center = glm::vec3(0.0f);
-
+	GLuint size;
 	bool isSet = false;
 
 
@@ -34,7 +37,8 @@ public:
 		loadAssimp(this->path.data(), this->vertices, this->normals, this->indices );
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
-		this->setup();
+		this->size = this->vertices.size();
+		//this->setup();
 	}
 	void setup() {
 		//std::cout << "Setting up buffers.\n";
@@ -46,10 +50,8 @@ public:
 
 		glGenBuffers(1, &EBO);
 
-		glGenBuffers(1, &maxPDBuffer);
-		glGenBuffers(1, &minPDBuffer);
-		glGenBuffers(1, &maxCurvBuffer);
-		glGenBuffers(1, &minCurvBuffer);
+		glGenBuffers(1, &PDBuffer);
+		glGenBuffers(1, &CurvBuffer);
 
 		//VAO  
 		glBindVertexArray(VAO);
@@ -60,7 +62,8 @@ public:
 		glBindBuffer(GL_ARRAY_BUFFER, normalBuffer);
 		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
 
-		// maxPD, minPD, maxCurv, minCurv
+		// Principal Directions / Principal Curvatures
+		// Access minimum direction with [index + size]
 
 		//EBO
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
@@ -131,14 +134,28 @@ public:
 		return minDist;
 	}
 	//Calculates principal curvatures and principal directions per vertex
-	//Let's use a compute shader with a SSBO
+	//Using a compute shader with SSBOs
 	void setupCurvatures() {
 		//generate ssbo to use in compute shader
 		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
-		GLuint ssbo;
+		GLuint vertexStorage, normalStorage, indexStorage;
+		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
+
+		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
+
+		//setup SSBOs
+		glGenBuffers(1, &PDBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
+		glGenBuffers(1, &CurvatureBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
 		glGenBuffers(1, &ssbo);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+		glGenBuffers(1, &ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+		glGenBuffers(1, &ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+		
 
 
 		unsigned int verticesSize = this->vertices.size();
@@ -146,14 +163,16 @@ public:
 		this->maxCurvs.resize(verticesSize); this->minCurvs.resize(verticesSize);
 
 
-		//kill ssbo
+		//kill read only SSBOs (vertex,normal,index SSBO)
 		glDeleteBuffers(1,&ssbo);
+		
 	}
 
-
+	/*
 	~Model() {
 		glDeleteBuffers()
 	}
+	*/
 };
 
 
