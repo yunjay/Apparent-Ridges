@@ -19,9 +19,8 @@ public:
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
-	std::vector<glm::vec3> maxPDs;
-	std::vector<glm::vec3> minPDs;
-	std::vector<GLfloat> maxCurvs, minCurvs;
+	std::vector<glm::vec3> PDs;
+	std::vector<GLfloat> PrincipalCurvatures;
 	std::vector<unsigned int> indices;
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
@@ -139,33 +138,65 @@ public:
 		//generate ssbo to use in compute shader
 		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
-		GLuint vertexStorage, normalStorage, indexStorage;
+		GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
 		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
+		
+		//resize vertices for curvature values resize(num,value)
+		PDs.resize(vertices.size()*2,0);
+		PrincipalCurvatures.resize(vertices.size()*2,0);
 
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
-
+		
 		//setup SSBOs
+		//gen -> bind (set to GL state) -> bufferData
+		//for writing
 		glGenBuffers(1, &PDBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), PDs, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
+
 		glGenBuffers(1, &CurvatureBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-		glGenBuffers(1, &ssbo);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-		glGenBuffers(1, &ssbo);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
-		glGenBuffers(1, &ssbo);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), PrincipalCurvatures, GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
+
+		//for reading
+		//Vertex positions
+		glGenBuffers(1, &vertexStorageBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, vertexStorageBuffer);
+		std::vector<glm::vec4> vertexStorage;
+		for(auto v : vertices){ //make vec4s from vec3s
+			vertexStorage.push_back(glm::vec4(v,0.0f));
+		}
+		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size()*sizeof(glm::vec4), vertexStorage, GL_DYNAMIC_DRAW)
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,9,vertexStorageBuffer);
+
+		glGenBuffers(1, &normalStorageBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, normalStorageBuffer);
+		std::vector<glm::vec4> normalStorage;
+		for(auto v : normals){
+			normalStorage.push_back(glm::vec4(v,0.0f));
+		}
+		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size()*sizeof(glm::vec4), normalStorage, GL_DYNAMIC_DRAW)
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,10,normalStorageBuffer);
 		
+		glGenBuffers(1, &indexStorageBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(unsigned int),indices,GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,11,indexStorageBuffer);
 
-
-		unsigned int verticesSize = this->vertices.size();
-		this->maxPDs.resize(verticesSize); this->minPDs.resize(verticesSize);
-		this->maxCurvs.resize(verticesSize); this->minCurvs.resize(verticesSize);
+		//hmm.. we move by indices so send indicies size.
+		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
+		
+		//Dispatch -> run compute shader in GPU
+		
+		//Barrier to ensure coherency
 
 
 		//kill read only SSBOs (vertex,normal,index SSBO)
+		glBindBuffer(GL_ARRAY_BUFFER,0); //unbind
 		glDeleteBuffers(1,&ssbo);
 		
+		//This was easier than expected, who needs CUDA? :)
 	}
 
 	/*

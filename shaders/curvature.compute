@@ -20,7 +20,7 @@ layout(binding = 7, std430) writeonly buffer PDBuffer
     vec4 PDs[];
 };
 //SSBO for principal curvatures
-layout(binding = 8, std430) writeonly buffer curvatureBufffer{
+layout(binding = 8, std430) wrriteonly buffer CurvatureBufffer{
     float curvatures[];
 }
 // so we'll be indexing vertices using global index with /3 and %3 I guess?
@@ -31,14 +31,14 @@ layout(binding = 10, std430) readonly buffer normalBuffer{
     vec4 normals[];
 }
 layout(binding = 11, std430) readonly buffer indexBuffer{
-    int indices[];
+    uint indices[];
 }
 
 uniform uint size;
 
 void main(){
     //Just shove it all into 1D? Our vertex information is in a 1D array so...
-    uint invocationID = gl_GlobalInvocationID.x;
+    uint invocationID = gl_GlobalInvocationID.x; //starts with 0
     //if(invocationID%3!=0) return; //filter first vertices. 
     //-> Or alternatively run size/3 invocations!
     uint v0id;
