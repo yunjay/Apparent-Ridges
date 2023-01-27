@@ -19,6 +19,8 @@ public:
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
+	std::vector<glm::vec3> tangents;
+	std::vector<glm::vec3> bitangents
 	std::vector<glm::vec3> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
 	std::vector<unsigned int> indices;
@@ -37,6 +39,7 @@ public:
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
+		this->setupCurvatures();
 		//this->setup();
 	}
 	void setup() {
@@ -90,16 +93,14 @@ public:
 
 		return;
 	}
-
+	//draw function
 	bool render(GLuint shader) {
 
 		if (!isSet) { this->setup(); }
 
 		glUseProgram(shader);
 		glBindVertexArray(VAO);
-
 		glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
-
 
 		//glDisableVertexAttribArray(0);
 		//glDisableVertexAttribArray(1);
@@ -139,7 +140,9 @@ public:
 		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
 		GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
+		
 		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
+
 		
 		//resize vertices for curvature values resize(num,value)
 		PDs.resize(vertices.size()*2,0);
@@ -186,17 +189,25 @@ public:
 
 		//hmm.. we move by indices so send indicies size.
 		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
+
+		//Use compute shader
+		glUseProgram(curvatureCompute);
 		
-		//Dispatch -> run compute shader in GPU
-		
+		//Dispatch -> run compute shader in GPU 
+		//As we have 1024 invocations per work group
+		glDispatchCompute(glm::ceil((this->size/3)/1024),1,1);
 		//Barrier to ensure coherency
-
-
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		//glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		
 		//kill read only SSBOs (vertex,normal,index SSBO)
 		glBindBuffer(GL_ARRAY_BUFFER,0); //unbind
-		glDeleteBuffers(1,&ssbo);
+		glDeleteBuffers(1,&vertexStorageBuffer);
+		glDeleteBuffers(1,&normalStorageBuffer);
+		glDeleteBuffers(1,&indexStorageBuffer);
 		
-		//This was easier than expected, who needs CUDA? :)
+		std::cout<<"Curvatures calculated on compute shader\n";
+		//is CUDA necessary?
 	}
 
 	/*
@@ -220,7 +231,7 @@ bool loadAssimp(
 	Assimp::Importer importer;
 	printf("Loading file : %s...\n", path);
 	//aiProcess_Triangulate !!!
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices|aiProcess_CalcTangentSpace |aiProcess_GenUVCoords ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf(stderr, importer.GetErrorString());
 		return false;
