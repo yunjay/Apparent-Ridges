@@ -9,7 +9,7 @@ layout(binding = 7, std430) readonly buffer PDBuffer
 
 
 out VertexData{
-    out vec3 ormal;
+    out vec3 normal;
     out vec3 fragPos;
     out vec2 texCoords;
 } vertexOut

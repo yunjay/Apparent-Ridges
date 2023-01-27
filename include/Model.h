@@ -100,6 +100,9 @@ public:
 
 		glUseProgram(shader);
 		glBindVertexArray(VAO);
+
+		glUniform1ui(glGetUniformLocation(shader, "size"), this->size);
+
 		glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
 
 		//glDisableVertexAttribArray(0);
@@ -141,6 +144,7 @@ public:
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
 		GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
 		
+		//Load compute shader
 		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
 
 		
@@ -216,6 +220,7 @@ public:
 	}
 	*/
 };
+//end of Model class
 
 
 bool loadAssimp(
