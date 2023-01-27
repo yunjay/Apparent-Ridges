@@ -62,7 +62,7 @@ void main(){
         normalize(verticesOnFace[2]-verticesOnFace[1]),
         normalize(verticesOnFace[0]-verticesOnFace[2]),
         normalize(verticesOnFace[1]-verticesOnFace[0]),
-    }
+    };
     
     //initial coordinate system by vertex
     vec3 pd1[3]={
