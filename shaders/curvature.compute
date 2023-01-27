@@ -175,7 +175,7 @@ void main(){
         c12= m[0] * u1 * u2 + m[1] * (u1*v2 + u2*v1) + m[2] * v1*v2;
         c2 = m[0] * u2 * u2 + m[1] * (2.0 * u2 * v2) + m[2] * v2*v2;
         
-        float weight = 1.0/3.0;
+        float wt = 1.0/3.0;
         //weight = corner area / point area 
         
         curv1[i] += wt*c1;
@@ -207,7 +207,7 @@ void main(){
         float c=1, s=0, tt=0;
         if(curv12[i] != 0.0){
             // Jacobi rotation
-            float h = 0.5 * (kv-ku)/kuv;
+            float h = 0.5 * (curv2[i] - curv1[i])/curv12[i];
             if(h < 0.0){
                 tt = 1.0 / (h - sqrt(1.0 + h*h));
             } else{
