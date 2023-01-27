@@ -120,7 +120,7 @@ void main(){
 
     float d2 = w[2][2] - ( diagonal[0] * w[2][0] * w[2][0] ) - (diagonal[1] * w[2][1] * w[2][1]);
     diagonal[2] = 1/d2;
-    w[2][0] = w[0][2]
+    w[2][0] = w[0][2];
     w[2][1] = w[1][2] - l10 * w[2][0];
 
     //Solve with LDLT decomposition
@@ -133,7 +133,7 @@ void main(){
     }
     for (int i = 2; i>=0; i--){
         float sum = 0;
-        for (int j=i+1;k<3;j++){
+        for (int j=i+1;j<3;j++){
             sum += w[j][i] * m[j];
         }
         m[i] -= sum * diagonal[i];
