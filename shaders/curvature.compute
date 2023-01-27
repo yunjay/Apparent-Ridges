@@ -242,12 +242,12 @@ void main(){
     PDs[v1id] = vec4(pd1[1],0.0);
     PDs[v2id] = vec4(pd1[2],0.0);
 
-    curvatures[v0id] = vec4(curv1[0],0.0);
-    curvatures[v1id] = vec4(curv1[1],0.0);
-    curvatures[v2id] = vec4(curv1[2],0.0);    
+    curvatures[v0id] = curv1[0];
+    curvatures[v1id] = curv1[1];
+    curvatures[v2id] = curv1[2];    
 
-    curvatures[v0id] = vec4(curv2[0],0.0);
-    curvatures[v1id] = vec4(curv2[1],0.0);
-    curvatures[v2id] = vec4(curv2[2],0.0);
+    curvatures[v0id] = curv2[0];
+    curvatures[v1id] = curv2[1];
+    curvatures[v2id] = curv2[2];
 
 }
