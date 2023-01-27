@@ -107,8 +107,8 @@ int main()
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
     GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
-    GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vs",".\\shaders\\PDmax.fs",".\\shaders\\PDmax.gs"),;
-    GLuint minPDShader = loadShader(".\\shaders\\PDmin.vs",".\\shaders\\PDmin.fs",".\\shaders\\PDmin.gs"),;
+    GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vs",".\\shaders\\PDmax.fs",".\\shaders\\PDmax.gs");
+    GLuint minPDShader = loadShader(".\\shaders\\PDmin.vs",".\\shaders\\PDmin.fs",".\\shaders\\PDmin.gs");
 
     //GLuint* currentShader = &apparantRidges;
     GLuint* currentShader = &diffuse;
@@ -201,6 +201,8 @@ int main()
             
 
         currentModel->render(*currentShader);
+        currentModel->render(maxPDShader);
+        currentModel->render(minPDShader);
 
         glUseProgram(0);
 

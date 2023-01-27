@@ -1,3 +1,6 @@
+#ifndef _COMPUTESHADER_H_
+#define _COMPUTESHADER_H_
+
 #include <glad/glad.h>
 #include <iostream>
 #include <string>
@@ -93,11 +96,16 @@ GLint getMaxShaderStorageBlockSize() {
     return size;
 }
 void printComputeShaderSizes() {
-    cout << "Max Work Group count : " << getMaxComputeWorkGroupCount(0) << ", " << getMaxComputeWorkGroupCount(1) << ", " << getMaxComputeWorkGroupCount(2) << ".\n";
-    cout << "Max Work Group local size : " << getMaxComputeWorkGroupSize(0) << ", " << getMaxComputeWorkGroupSize(1) << ", " << getMaxComputeWorkGroupSize(2) << ".\n";
-    cout << "Max compute shader invocations : " << getMaxComputeWorkGroupInvocations() << "\n";
-    cout << "Max compute shader shared memory size : " << getMaxComputeSharedMemorySize() << "\n";
-    cout << "Max SSBO size : " << getMaxShaderStorageBlockSize() << "\n";
-    cout << "Max SSBO bindings : " << getMaxShaderStorageBufferBindings() << "\n";
-    cout << "Max UBO size : " << getMaxUniformBlockSize() << "\n";
+    cout << "Max Work Group count : " << (int)getMaxComputeWorkGroupCount(0) << ", " << (int)getMaxComputeWorkGroupCount(1) << ", " << (int)getMaxComputeWorkGroupCount(2) << ".\n";
+    cout << "Max Work Group local size : " << (int)getMaxComputeWorkGroupSize(0) << ", " << (int)getMaxComputeWorkGroupSize(1) << ", " << (int)getMaxComputeWorkGroupSize(2) << ".\n";
+    cout << "Max compute shader invocations : " << (int)getMaxComputeWorkGroupInvocations() << "\n";
+    cout << "Max compute shader shared memory size : " << (int)getMaxComputeSharedMemorySize() << "\n";
+    cout << "Max SSBO size : " << (int)getMaxShaderStorageBlockSize() << "\n";
+    cout << "Max SSBO bindings : " << (int)getMaxShaderStorageBufferBindings() << "\n";
+    cout << "Max UBO size : " << (int)getMaxUniformBlockSize() << "\n";
 }
+
+
+
+
+#endif

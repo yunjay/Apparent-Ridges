@@ -20,7 +20,7 @@ public:
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
 	std::vector<glm::vec3> tangents;
-	std::vector<glm::vec3> bitangents
+	std::vector<glm::vec3> bitangents;
 	std::vector<glm::vec3> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
 	std::vector<unsigned int> indices;
@@ -52,8 +52,8 @@ public:
 
 		glGenBuffers(1, &EBO);
 
-		glGenBuffers(1, &PDBuffer);
-		glGenBuffers(1, &CurvBuffer);
+		//glGenBuffers(1, &PDBuffer);
+		//glGenBuffers(1, &CurvBuffer);
 
 		//VAO  
 		glBindVertexArray(VAO);
@@ -145,7 +145,7 @@ public:
 
 		
 		//resize vertices for curvature values resize(num,value)
-		PDs.resize(vertices.size()*2,0);
+		PDs.resize(vertices.size()*2,glm::vec3(0));
 		PrincipalCurvatures.resize(vertices.size()*2,0);
 
 		
@@ -154,12 +154,12 @@ public:
 		//for writing
 		glGenBuffers(1, &PDBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), PDs, GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), &PDs[0], GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
 
 		glGenBuffers(1, &CurvatureBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), PrincipalCurvatures, GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), &PrincipalCurvatures[0], GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
 
 		//for reading
@@ -170,7 +170,7 @@ public:
 		for(auto v : vertices){ //make vec4s from vec3s
 			vertexStorage.push_back(glm::vec4(v,0.0f));
 		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size()*sizeof(glm::vec4), vertexStorage, GL_DYNAMIC_DRAW)
+		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size() * sizeof(glm::vec4), &vertexStorage[0], GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,9,vertexStorageBuffer);
 
 		glGenBuffers(1, &normalStorageBuffer);
@@ -179,12 +179,12 @@ public:
 		for(auto v : normals){
 			normalStorage.push_back(glm::vec4(v,0.0f));
 		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size()*sizeof(glm::vec4), normalStorage, GL_DYNAMIC_DRAW)
+		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size() * sizeof(glm::vec4), &normalStorage[0], GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,10,normalStorageBuffer);
 		
 		glGenBuffers(1, &indexStorageBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(unsigned int),indices,GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(unsigned int), &indices[0], GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,11,indexStorageBuffer);
 
 		//hmm.. we move by indices so send indicies size.
