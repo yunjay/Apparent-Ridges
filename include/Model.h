@@ -9,7 +9,7 @@
 #include <assimp/scene.h>          
 #include <assimp/postprocess.h>     
 
-#include "computeShader.h"
+#include "LoadShader.h"
 bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
 
 class Model {
@@ -21,9 +21,10 @@ public:
 	std::vector<glm::vec2> textureCoordinates;
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
-	std::vector<glm::vec3> PDs;
+
+	std::vector<glm::vec4> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
-	std::vector<unsigned int> indices;
+	std::vector<GLuint> indices;
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
 	GLfloat modelScaleFactor = 1.0f;
@@ -44,7 +45,6 @@ public:
 	}
 	void setup() {
 		//std::cout << "Setting up buffers.\n";
-
 		glGenVertexArrays(1, &VAO); //vertex array object
 		glGenBuffers(1, &positionBuffer); //vertex buffer object
 		glGenBuffers(1, &normalBuffer); //vertex buffer object
@@ -149,21 +149,23 @@ public:
 
 		
 		//resize vertices for curvature values resize(num,value)
-		PDs.resize(vertices.size()*2,glm::vec3(0));
-		PrincipalCurvatures.resize(vertices.size()*2,0);
+		PDs.resize(vertices.size()*2,glm::vec4(0));
+		PrincipalCurvatures.resize(vertices.size()*2,0.0f);
 
-		
 		//setup SSBOs
+		// STD vector with SSBOs, is it ok or not?
+		// Let's try changing to normal arrays, as we take the data as arrays in the SSBO.
+		// Just &[0] -> .data() ?
 		//gen -> bind (set to GL state) -> bufferData
 		//for writing
 		glGenBuffers(1, &PDBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), &PDs[0], GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), PDs.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
 
 		glGenBuffers(1, &CurvatureBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), &PrincipalCurvatures[0], GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), PrincipalCurvatures.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
 
 		//for reading
@@ -174,38 +176,41 @@ public:
 		for(auto v : vertices){ //make vec4s from vec3s
 			vertexStorage.push_back(glm::vec4(v,0.0f));
 		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size() * sizeof(glm::vec4), &vertexStorage[0], GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size() * sizeof(glm::vec4), vertexStorage.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,9,vertexStorageBuffer);
 
+		//norrmals
 		glGenBuffers(1, &normalStorageBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, normalStorageBuffer);
 		std::vector<glm::vec4> normalStorage;
 		for(auto v : normals){
 			normalStorage.push_back(glm::vec4(v,0.0f));
 		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size() * sizeof(glm::vec4), &normalStorage[0], GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size() * sizeof(glm::vec4), normalStorage.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,10,normalStorageBuffer);
 		
 		glGenBuffers(1, &indexStorageBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(unsigned int), &indices[0], GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,11,indexStorageBuffer);
 
-		//hmm.. we move by indices so send indicies size.
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
 
 		//Use compute shader
 		glUseProgram(curvatureCompute);
 		
+		//hmm.. we move by indices so send indicies size.
+		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
+
 		//Dispatch -> run compute shader in GPU 
 		//As we have 1024 invocations per work group
-		glDispatchCompute(glm::ceil((this->size/3)/1024),1,1);
+		glDispatchCompute(glm::ceil( (GLfloat(this->size)/3.0f)/1024.0f ),1,1);
+
 		//Barrier to ensure coherency
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		//glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		
-		//kill read only SSBOs (vertex,normal,index SSBO)
-		glBindBuffer(GL_ARRAY_BUFFER,0); //unbind
+		//kill "read only" SSBOs (vertex,normal,index SSBO)
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER,0); //unbind
 		glDeleteBuffers(1,&vertexStorageBuffer);
 		glDeleteBuffers(1,&normalStorageBuffer);
 		glDeleteBuffers(1,&indexStorageBuffer);

@@ -12,9 +12,8 @@
 #include <iostream>
 #include <string>
 
-#include "loadShader.h"
+#include "LoadShader.h"
 #include "Model.h"
-#include "computeShader.h"
 // settings
 const unsigned int SCR_WIDTH = 2400;
 const unsigned int SCR_HEIGHT = 1350;
@@ -41,8 +40,9 @@ int main()
 
 
     // glfw: initialize and configure
+    // MIND THE VERSION!!!
     glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 

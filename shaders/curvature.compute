@@ -18,7 +18,7 @@ layout(binding = 7, std430) writeonly buffer PDBuffer{
     vec4 PDs[];
 };
 //SSBO for principal curvatures
-layout(binding = 8, std430) writeonly buffer CurvatureBufffer{
+layout(binding = 8, std430) writeonly buffer curvatureBufffer{
     float curvatures[];
 };
 // so we'll be indexing vertices using global index with /3 and %3 I guess?
@@ -50,7 +50,8 @@ void main(){
     vec3 verticesOnFace[3] = {
         vec3(vertices[v0id]),
         vec3(vertices[v1id]),
-        vec3(vertices[v2id])};
+        vec3(vertices[v2id])
+    };
     //normals
     vec3 normalsOnFace[3]={
         vec3(normals[v0id]),
