@@ -14,7 +14,7 @@ out VertexData{
     out vec3 normal;
     out vec3 fragPos;
     out vec2 texCoords;
-} vertexOut
+} vertexOut;
 
 uniform mat4 model;
 uniform mat4 view;
