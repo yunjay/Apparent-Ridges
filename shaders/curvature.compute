@@ -213,7 +213,12 @@ void main(){
         vec3 oldU = pd1[i];
         vec3 oldV = pd2[i];
         pd1[i] = normalize((ev1.x * oldU)+(ev1.y * oldV));
+        //project to tangent of vertex
+        pd1[i] = normalize(pd1[i]-dot(pd1[i],normalsOnFace[i])*normalsOnFace[i]);
         pd2[i] = normalize(cross(pd1[i],normalsOnFace[i]));
+
+        curv1[i]=lambda1;
+        curv2[i]=lambda2;
     }
     //Lets write max principal directions first, then min principal directions. (+ size)
     //Same with curvatures.
