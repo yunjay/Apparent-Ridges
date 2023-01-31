@@ -42,7 +42,7 @@ void main(){
     
     //By Face
     //indices
-    if(3*invocationID > size) return;
+    if(3*invocationID > indicesSize) return;
     
     uint v0id=indices[invocationID*3];
     uint v1id=indices[invocationID*3+1];
