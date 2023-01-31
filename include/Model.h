@@ -101,7 +101,6 @@ public:
 		glUseProgram(shader);
 		glBindVertexArray(VAO);
 
-		glUniform1ui(glGetUniformLocation(shader, "size"), this->size);
 
 		glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
 

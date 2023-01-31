@@ -210,12 +210,14 @@ int main()
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+            glUniform1ui(glGetUniformLocation(maxPDShader, "size"), currentModel->vertices.size());
 
             glUseProgram(minPDShader);
             glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+            glUniform1ui(glGetUniformLocation(minPDShader, "size"), currentModel->vertices.size());
 
         }
 
