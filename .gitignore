@@ -5,7 +5,7 @@
 *.slo
 *.lo
 *.o
-*.obj
+
 
 # Precompiled Headers
 *.gch
@@ -54,3 +54,19 @@ x64/Debug/ApparantRidges.tlog/unsuccessfulbuild
 *.txt
 *.iobj
 *.ipdb
+x64/Release/imgui.obj
+x64/Release/imgui_draw.obj
+x64/Release/ApparantRidges.obj
+x64/Release/imgui_demo.obj
+x64/Release/imgui_impl_glfw.obj
+x64/Release/imgui_tables.obj
+x64/Release/imgui_impl_opengl3.obj
+x64/Release/imgui_widgets.obj
+x64/Debug/imgui_impl_glfw.obj
+x64/Debug/imgui_draw.obj
+x64/Debug/imgui_demo.obj
+x64/Debug/imgui_impl_opengl3.obj
+x64/Debug/imgui_tables.obj
+x64/Debug/imgui_widgets.obj
+x64/Debug/imgui.obj
+x64/Debug/ApparentRidges.obj
