@@ -43,9 +43,14 @@ void main(){
     //By Face
     //indices
     if(3*invocationID > size) return;
+    /*
     uint v0id=indices[invocationID*3];
     uint v1id=indices[invocationID*3+1];
     uint v2id=indices[invocationID*3+2]; 
+    */
+    uint v0id=invocationID*3;
+    uint v1id=invocationID*3+1;
+    uint v2id=invocationID*3+2; 
     //vertices
     vec3 verticesOnFace[3] = {
         vec3(vertices[v0id]),
@@ -69,7 +74,8 @@ void main(){
     vec3 pd1[3]={
         verticesOnFace[2]-verticesOnFace[0], 
         verticesOnFace[2]-verticesOnFace[1], 
-        verticesOnFace[0]-verticesOnFace[2]};
+        verticesOnFace[0]-verticesOnFace[2]
+    };
     pd1[0]=normalize(cross(pd1[0],normalsOnFace[0]));
     pd1[1]=normalize(cross(pd1[1],normalsOnFace[1]));
     pd1[2]=normalize(cross(pd1[2],normalsOnFace[2]));
@@ -77,7 +83,8 @@ void main(){
     vec3 pd2[3]={
         normalize(cross(normalsOnFace[0],pd1[0])),
         normalize(cross(normalsOnFace[1],pd1[1])),
-        normalize(cross(normalsOnFace[2],pd1[2]))};
+        normalize(cross(normalsOnFace[2],pd1[2]))
+    };
 
     //Set normal, tangent, bitangent per face
     vec3 faceTangent = edges[0];
@@ -239,16 +246,18 @@ void main(){
     PDs[v1id] = vec4(pd1[1],0.0);
     PDs[v2id] = vec4(pd1[2],0.0);
 
-    PDs[v0id] = vec4(pd1[0],0.0);
-    PDs[v1id] = vec4(pd1[1],0.0);
-    PDs[v2id] = vec4(pd1[2],0.0);
+    PDs[v0id+size] = vec4(pd2[0],0.0);
+    PDs[v1id+size] = vec4(pd2[1],0.0);
+    PDs[v2id+size] = vec4(pd2[2],0.0);
 
     curvatures[v0id] = curv1[0];
     curvatures[v1id] = curv1[1];
     curvatures[v2id] = curv1[2];    
 
-    curvatures[v0id] = curv2[0];
-    curvatures[v1id] = curv2[1];
-    curvatures[v2id] = curv2[2];
+    curvatures[v0id+size] = curv2[0];
+    curvatures[v1id+size] = curv2[1];
+    curvatures[v2id+size] = curv2[2];
 
 }
+
+//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS would have been easier.

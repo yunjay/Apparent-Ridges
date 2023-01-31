@@ -215,7 +215,7 @@ public:
 		glDeleteBuffers(1,&normalStorageBuffer);
 		glDeleteBuffers(1,&indexStorageBuffer);
 		
-		std::cout<<"Curvatures calculated on compute shader\n";
+		std::cout<<"Curvatures for "<<this->path <<" calculated on compute shader.\n";
 		//is CUDA necessary?
 	}
 

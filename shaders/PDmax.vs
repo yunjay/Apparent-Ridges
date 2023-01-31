@@ -18,9 +18,11 @@ uniform uint size;
 
 void main()
 {
+    gl_Position =  view * model * vec4(aPos, 1.0); 
+ 
     vec3 maxPD = vec3(PDs[gl_VertexID]);
     vec3 minPD = vec3(PDs[gl_VertexID+size]);
-    gl_Position =  view * model * vec4(aPos, 1.0); 
+ 
     vs_out.maxPrincipal = mat3(transpose(inverse(view*model))) * maxPD;
     vs_out.minPrincipal = mat3(transpose(inverse(view*model))) * minPD;
 

@@ -28,16 +28,20 @@ float xDegrees = 0.0f;
 float yDegrees = 0.0f;
 float modelSize = 1.0f;
 float lightDegrees = 0.0f;
+float PDLengthScale = 1.0f;
 glm::vec3 background(30.0 / 255, 30.0 / 255, 30.0 / 255);
 glm::vec3 lineColor(1.0f);
 
 bool ridgesOn = true;
+bool PDsOn = false;
+
 int main()
 {
     int lineWidth = 1;
     float thresholdScale = 1.0f;
 
-
+    glm::vec3 test = glm::vec3(glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
+    std::cout << "vec3(vec4(1,2,3,4)) : " <<test.x<<" "<<test.y<<" " << test.z << "\n";
 
     // glfw: initialize and configure
     // MIND THE VERSION!!!
@@ -106,7 +110,8 @@ int main()
 
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
-    GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
+    //GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
+    GLuint apparentRidges = diffuse;
     GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vs",".\\shaders\\PDmax.fs",".\\shaders\\PDmax.gs");
     GLuint minPDShader = loadShader(".\\shaders\\PDmin.vs",".\\shaders\\PDmin.fs",".\\shaders\\PDmin.gs");
 
@@ -145,17 +150,20 @@ int main()
         //IMGui window
         ImGui::Begin("Apparent Ridges");
         ImGui::Checkbox("Line Drawing with Apparent Ridges", &ridgesOn);
-
+        ImGui::Checkbox("Principal Directions", &PDsOn);
         const char* listboxItems[] = { "Bunny", "Lucy", "David", /*"Brain",*/ "Dragon", "Golfball"};
         static int currentlistboxItem = 0;
-        ImGui::ListBox("Shading Method", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
+        ImGui::ListBox("Model", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
+
 
         ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 10.0f);
         ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
+        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 3.0f);
+
         //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);
 
         //ImGui::SliderFloat("Brightness", &diffuse, 0.0f, 2.0f);
@@ -176,7 +184,6 @@ int main()
         glUniform3f(glGetUniformLocation(*currentShader, "light.position"), lightPos.x, lightPos.y, lightPos.z);
         //glUniform3f(glGetUniformLocation(*currentShader, "light.diffuse"), lightDiffuse.x, lightDiffuse.y, lightDiffuse.z);
         
-
         //opengl matrice transforms are applied from the right side. (last first)
         glm::mat4 model = glm::mat4(1);
         model = glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f));
@@ -196,9 +203,21 @@ int main()
             glUniform3f(glGetUniformLocation(apparentRidges,"viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
             glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),currentModel->minDistance*thresholdScale);
             glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
-            
         }
-            
+        if (PDsOn) {
+            glUseProgram(maxPDShader);
+            glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
+            glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "model"), 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "view"), 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+
+            glUseProgram(minPDShader);
+            glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
+            glUniformMatrix4fv(glGetUniformLocation(minPDShader, "model"), 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(minPDShader, "view"), 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(minPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+
+        }
 
         currentModel->render(*currentShader);
         currentModel->render(maxPDShader);
