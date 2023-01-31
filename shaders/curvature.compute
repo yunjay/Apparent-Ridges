@@ -32,8 +32,8 @@ layout(binding = 11, std430) readonly buffer indexBuffer{
     uint indices[];
 };
 
-uniform uint size;
-
+uniform uint indicesSize;
+uniform uint verticesSize;
 void main(){
     //Just shove it all into 1D? Our vertex information is in a 1D array so...
     uint invocationID = gl_GlobalInvocationID.x; //starts with 0
@@ -43,14 +43,14 @@ void main(){
     //By Face
     //indices
     if(3*invocationID > size) return;
-    /*
+    
     uint v0id=indices[invocationID*3];
     uint v1id=indices[invocationID*3+1];
     uint v2id=indices[invocationID*3+2]; 
-    */
+    /*
     uint v0id=invocationID*3;
     uint v1id=invocationID*3+1;
-    uint v2id=invocationID*3+2; 
+    uint v2id=invocationID*3+2; */
     //vertices
     vec3 verticesOnFace[3] = {
         vec3(vertices[v0id]),
@@ -183,17 +183,66 @@ void main(){
         c12= m[0] * u1 * u2 + m[1] * (u1*v2 + u2*v1) + m[2] * v1*v2;
         c2 = m[0] * u2 * u2 + m[1] * (2.0 * u2 * v2) + m[2] * v2*v2;
         
-        float wt = 1.0/3.0;
+        float wt = 1.0;
         //weight = corner area / point area 
+        // Voronoi area weighting.
         
         curv1[i] += wt*c1;
         curv12[i] += wt*c12;
         curv2[i] += wt*c2;
     }
     
-    //compute principal directions and curvatures with the curvature tensor (2FF)
+    //compute principal directions and curvatures with the curvature tensor (2FF) by eigens
+    //Usually on computers eigenvectors / eigenvalues are calculated with iterative QR decomposition 
+    // As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
+    // I'll be calculating using a trick for 2x2 matrices
+    // The column space of the solution for one eigenvalue's eigenvector corresponds to the eigenspace of the other eigenvalue.
+    for(int i=0; i<3 ;i++){
+            //curv1 curv12
+            //curv12 curv2
+        float m = (curv1[i]+curv2[i])/2.0;
+        float detA = curv1[i]*curv2[i] - curv12[i]*curv12[i];
+        //Eigenvalues
+        float lambda1 = m + sqrt(m*m - detA); //max right?
+        float lambda2 = m - sqrt(m*m - detA);
+        //local eigenvectors
+        vec2 ev1 = normalize(vec2(curv1[i]-lambda2,curv12[i]));
+        vec2 ev2 = normalize(vec2(curv1[i]-lambda1,curv12[i]));
+
+        //set to 3d world space
+        vec3 oldU = pd1[i];
+        vec3 oldV = pd2[i];
+        pd1[i] = normalize((ev1.x * oldU)+(ev1.y * oldV));
+        pd2[i] = normalize(cross(pd1[i],normalsOnFace[i]));
+    }
+    //Lets write max principal directions first, then min principal directions. (+ size)
+    //Same with curvatures.
+    PDs[v0id] = vec4(pd1[0],0.0);
+    PDs[v1id] = vec4(pd1[1],0.0);
+    PDs[v2id] = vec4(pd1[2],0.0);
+
+    PDs[v0id+verticesSize] = vec4(pd2[0],0.0);
+    PDs[v1id+verticesSize] = vec4(pd2[1],0.0);
+    PDs[v2id+verticesSize] = vec4(pd2[2],0.0);
+
+    curvatures[v0id] = curv1[0];
+    curvatures[v1id] = curv1[1];
+    curvatures[v2id] = curv1[2];    
+
+    curvatures[v0id+verticesSize] = curv2[0];
+    curvatures[v1id+verticesSize] = curv2[1];
+    curvatures[v2id+verticesSize] = curv2[2];
+
+}
+
+//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS would have been easier.
+
+
+// Weird way of calculating eigenvalues  / vectors I don't understand.
+/*
+
     for(int i = 0 ; i<3 ;i++){
-        //Rotate coordinates 
+        //Rotate coordinates to new plane
         vec3 newU = pd1[i]; 
         vec3 newV = pd2[i];
         vec3 pastNorm = cross(newU,newV);
@@ -240,24 +289,4 @@ void main(){
         }
         pd2[i] = cross(normalsOnFace[i],pd1[i]);
     }
-    //Lets write max principal directions first, then min principal directions. (+ size)
-    //Same with curvatures.
-    PDs[v0id] = vec4(pd1[0],0.0);
-    PDs[v1id] = vec4(pd1[1],0.0);
-    PDs[v2id] = vec4(pd1[2],0.0);
-
-    PDs[v0id+size] = vec4(pd2[0],0.0);
-    PDs[v1id+size] = vec4(pd2[1],0.0);
-    PDs[v2id+size] = vec4(pd2[2],0.0);
-
-    curvatures[v0id] = curv1[0];
-    curvatures[v1id] = curv1[1];
-    curvatures[v2id] = curv1[2];    
-
-    curvatures[v0id+size] = curv2[0];
-    curvatures[v1id+size] = curv2[1];
-    curvatures[v2id+size] = curv2[2];
-
-}
-
-//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS would have been easier.
+*/

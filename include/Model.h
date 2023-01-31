@@ -199,7 +199,8 @@ public:
 		glUseProgram(curvatureCompute);
 		
 		//hmm.. we move by indices so send indicies size.
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "size"), this->size);
+		glUniform1ui(glGetUniformLocation(curvatureCompute, "indicesSize"), this->indices.size());
+		glUniform1ui(glGetUniformLocation(curvatureCompute, "verticesSize"), this->vertices.size());
 
 		//Dispatch -> run compute shader in GPU 
 		//As we have 1024 invocations per work group
