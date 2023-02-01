@@ -126,7 +126,6 @@ public:
 
 			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
 
-			glGetNamedBufferSubData();
 		}
 
 
