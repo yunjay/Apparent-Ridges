@@ -14,17 +14,21 @@ bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vecto
 
 class Model {
 public:
+	//Handles
 	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO;
 	GLuint PDBuffer, CurvatureBuffer;
+	GLuint maxPDVBO, maxCurvVBO, minPDVBO, minCurvVBO;
+
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
 	std::vector<glm::vec2> textureCoordinates;
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
+	std::vector<GLuint> indices;
 
 	std::vector<glm::vec4> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
-	std::vector<GLuint> indices;
+	
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
 	GLfloat modelScaleFactor = 1.0f;
@@ -32,6 +36,7 @@ public:
 	glm::vec3 center = glm::vec3(0.0f);
 	GLuint size;
 	bool isSet = false;
+	bool curvaturesCalculated = false;
 
 
 	Model(std::string path) {
@@ -41,10 +46,11 @@ public:
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
 		this->setupCurvatures();
-		//this->setup();
+		this->setup();
 	}
 	void setup() {
 		//std::cout << "Setting up buffers.\n";
+		//vector.data() == &vector[0]
 		glGenVertexArrays(1, &VAO); //vertex array object
 		glGenBuffers(1, &positionBuffer); //vertex buffer object
 		glGenBuffers(1, &normalBuffer); //vertex buffer object
@@ -59,13 +65,10 @@ public:
 		glBindVertexArray(VAO);
 
 		glBindBuffer(GL_ARRAY_BUFFER, positionBuffer);
-		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(), GL_STATIC_DRAW);
 
 		glBindBuffer(GL_ARRAY_BUFFER, normalBuffer);
-		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), &normals[0], GL_STATIC_DRAW);
-
-		// Principal Directions / Principal Curvatures
-		// Access minimum direction with [index + size]
+		glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(glm::vec3), normals.data(), GL_STATIC_DRAW);
 
 		//EBO
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
@@ -75,6 +78,7 @@ public:
 
 		glEnableVertexAttribArray(0);
 		glBindBuffer(GL_ARRAY_BUFFER, positionBuffer);
+		// glVertexAttribPointer(index, size, type, normalized(bool), stride(byte offset between), pointer(offset))
 		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 		glEnableVertexAttribArray(1);
@@ -84,6 +88,48 @@ public:
 		glEnableVertexAttribArray(2);
 		glBindBuffer(GL_ARRAY_BUFFER, textureBuffer);
 		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+		// Principal Directions / Principal Curvatures (As VBOs)
+		if(this->curvaturesCalculated){
+			glGenBuffers(1, &maxPDVBO); //3
+			glGenBuffers(1, &minPDVBO); //4
+			glGenBuffers(1, &maxCurvVBO); //5
+			glGenBuffers(1, &minCurvVBO); //6
+
+			//Get data from SSBOs
+			//void glGetNamedBufferSubData(	GLuint buffer,GLintptr offset,GLsizeiptr size,void *data);
+			//buffer -> handle, offset -> start of data to read, size -> size of data to be read, *data -> pointer to return data
+			glGetNamedBufferSubData(PDBuffer,0,PDs.size()*sizeof(glm::vec4),PDs.data());
+			glGetNamedBufferSubData(CurvatureBuffer,0,PrincipalCurvatures.size()*sizeof(GLfloat),PrincipalCurvatures.data());
+
+			//Send PDs / PCs as attrbutes per vertex, just to uncomplicate some of this process.
+			glBindBuffer(GL_ARRAY_BUFFER,maxPDVBO);
+			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),PDs.data(),GL_STATIC_DRAW);
+			glEnableVertexAttribArray(3);
+			glVertexAttribPointer(3,4,GL_FLOAT,GL_FALSE,0,(void*)0); //Our PDs are vec4s due to SSBO reasons.
+
+			glBindBuffer(GL_ARRAY_BUFFER,minPDVBO);
+			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),&PDs[this->vertices.size()],GL_STATIC_DRAW);
+			glEnableVertexAttribArray(4);
+			glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,0,(void*)0);
+
+			glBindBuffer(GL_ARRAY_BUFFER,maxCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),PrincipalCurvatures.data(),GL_STATIC_DRAW);
+			glEnableVertexAttribArray(5);
+			glVertexAttribPointer(5,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+
+			glBindBuffer(GL_ARRAY_BUFFER,minCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),&PrincipalCurvatures[this->vertices.size()],GL_STATIC_DRAW);
+			glEnableVertexAttribArray(6);
+			glVertexAttribPointer(6,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+
+
+			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+
+			glGetNamedBufferSubData();
+		}
+
+
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
@@ -223,7 +269,7 @@ public:
 		std::cout<<"Curvatures for "<<this->path <<" calculated on compute shader.\n";
 		//is CUDA necessary?
 
-
+		this->curvaturesCalculated = true;
 
 	}
 

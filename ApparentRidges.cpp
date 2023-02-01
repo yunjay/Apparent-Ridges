@@ -205,6 +205,7 @@ int main()
             glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
         }
         if (PDsOn) {
+            //Render Principal Directions
             glUseProgram(maxPDShader);
             glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "model"), 1, GL_FALSE, &model[0][0]);
