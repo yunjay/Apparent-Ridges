@@ -203,7 +203,7 @@ public:
 
 		//Dispatch -> run compute shader in GPU 
 		//As we have 1024 invocations per work group
-		glDispatchCompute(glm::ceil( (GLfloat(this->size)/3.0f)/1024.0f ),1,1);
+		glDispatchCompute(glm::ceil( (GLfloat(this->indices.size())/3.0f)/1024.0f ),1,1);
 
 		//Barrier to ensure coherency
 		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);

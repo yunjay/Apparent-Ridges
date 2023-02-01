@@ -70,3 +70,4 @@ x64/Debug/imgui_tables.obj
 x64/Debug/imgui_widgets.obj
 x64/Debug/imgui.obj
 x64/Debug/ApparentRidges.obj
+x64/Release/ApparentRidges.obj
