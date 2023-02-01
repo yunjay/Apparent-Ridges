@@ -162,7 +162,7 @@ int main()
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 10.0f);
         ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
-        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 3.0f);
+        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
 
         //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);
 
@@ -211,6 +211,7 @@ int main()
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
             glUniform1ui(glGetUniformLocation(maxPDShader, "size"), currentModel->vertices.size());
+            
             currentModel->render(maxPDShader);
 
             glUseProgram(minPDShader);
@@ -219,6 +220,7 @@ int main()
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
             glUniform1ui(glGetUniformLocation(minPDShader, "size"), currentModel->vertices.size());
+            
             currentModel->render(minPDShader);
 
         }
