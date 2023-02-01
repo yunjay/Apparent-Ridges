@@ -101,6 +101,11 @@ public:
 		glUseProgram(shader);
 		glBindVertexArray(VAO);
 
+		//Rebind SSBOs
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
+
+
 
 		glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
 
@@ -217,6 +222,9 @@ public:
 		
 		std::cout<<"Curvatures for "<<this->path <<" calculated on compute shader.\n";
 		//is CUDA necessary?
+
+
+
 	}
 
 	/*

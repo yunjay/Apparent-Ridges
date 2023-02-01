@@ -95,7 +95,7 @@ void main(){
     float m[3] = { 0, 0, 0 };
 	float w[3][3] = { {0,0,0}, {0,0,0}, {0,0,0} };
 	for (int i = 0; i < 3; i++) {
-            //estimate that tensor
+            //estimate the tensor
 			float u = dot(edges[i],faceTangent);
 			float v = dot(edges[i],faceBitangent);
 			w[0][0] += u*u;
@@ -147,9 +147,9 @@ void main(){
         m[i] -= sum * diagonal[i];
     }
     //
-    float curv1[3] ={0,0,0};
-    float curv12[3] ={0,0,0};
-    float curv2[3] ={0,0,0};
+    float curv1[3] ={0.0, 0.0, 0.0};
+    float curv12[3] ={0.0, 0.0, 0.0};
+    float curv2[3] ={0.0, 0.0, 0.0};
     for(int i = 0; i<3 ; i++){
         float c1,c12,c2;
         //Project curvature tensor (2nd form) from the old u,v basis (saved in pd1,pd2)
