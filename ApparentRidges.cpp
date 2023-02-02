@@ -47,7 +47,7 @@ int main()
     // MIND THE VERSION!!!
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 #ifdef __APPLE__
@@ -98,6 +98,7 @@ int main()
     Model brain(".\\models\\brain-simple-mesh.obj");
     Model dragon(".\\xyzrgp_dragon.obj");
     Model golfball(".\\models\\GolfBallOBJ.obj");
+    order causes no bugs
     */
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
@@ -159,7 +160,7 @@ int main()
 
         ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
-        ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 10.0f);
+        ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
@@ -207,7 +208,7 @@ int main()
         if (PDsOn) {
             //Render Principal Directions
             glUseProgram(maxPDShader);
-            glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
+            glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), 0.5f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
@@ -216,7 +217,7 @@ int main()
             currentModel->render(maxPDShader);
 
             glUseProgram(minPDShader);
-            glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), PDLengthScale / currentModel->modelScaleFactor * modelSize);
+            glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), 0.5f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);

@@ -12,6 +12,13 @@
 #include "LoadShader.h"
 bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
 
+void printVec(glm::vec3 v) {
+	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ") ";
+}
+void printVec(glm::vec4 v) {
+	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ") ";
+}
+
 class Model {
 public:
 	//Handles
@@ -29,6 +36,13 @@ public:
 	std::vector<glm::vec4> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
 	
+	std::vector<glm::vec4> maxPDs;
+	std::vector<glm::vec4> minPDs;
+	std::vector<GLfloat> maxCurvs;
+	std::vector<GLfloat> minCurvs;
+
+
+
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
 	GLfloat modelScaleFactor = 1.0f;
@@ -99,8 +113,18 @@ public:
 			//Get data from SSBOs
 			//void glGetNamedBufferSubData(	GLuint buffer,GLintptr offset,GLsizeiptr size,void *data);
 			//buffer -> handle, offset -> start of data to read, size -> size of data to be read, *data -> pointer to return data
+			std::cout <<"Pds size"<< PDs.size() << "\n";
+			std::cout << "PDs[0] "; printVec(PDs[0]); std::cout << "\n";
+			std::cout << "PDs[1] "; printVec(PDs[1]); std::cout << "\n";
+			
 			glGetNamedBufferSubData(PDBuffer,0,PDs.size()*sizeof(glm::vec4),PDs.data());
+
+			std::cout << "PDs[0] "; printVec(PDs[0]); std::cout << "\n";
+			std::cout << "PDs[1] "; printVec(PDs[1]); std::cout << "\n";
+
 			glGetNamedBufferSubData(CurvatureBuffer,0,PrincipalCurvatures.size()*sizeof(GLfloat),PrincipalCurvatures.data());
+			std::cout << "PrincipalCurvatures[0] " << PrincipalCurvatures[0] << "\n";
+			std::cout << "PrincipalCurvatures[1] " << PrincipalCurvatures[1] << "\n";
 
 			//Send PDs / PCs as attrbutes per vertex, just to uncomplicate some of this process.
 			glBindBuffer(GL_ARRAY_BUFFER,maxPDVBO);
@@ -127,8 +151,6 @@ public:
 			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
 
 		}
-
-
 
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindVertexArray(0);
@@ -202,9 +224,8 @@ public:
 		PrincipalCurvatures.resize(vertices.size()*2,0.0f);
 
 		//setup SSBOs
-		// STD vector with SSBOs, is it ok or not?
-		// Let's try changing to normal arrays, as we take the data as arrays in the SSBO.
-		// Just &[0] -> .data() ?
+		// STD vector with SSBOs, is it ok or not?\
+		//  &[0] -> .data() 
 		//gen -> bind (set to GL state) -> bufferData
 		//for writing
 		glGenBuffers(1, &PDBuffer);
@@ -347,4 +368,3 @@ bool loadAssimp(
 	// The "scene" pointer will be deleted automatically by "importer"
 	return true;
 }
-
