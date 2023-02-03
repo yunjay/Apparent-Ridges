@@ -11,7 +11,6 @@
 
 #include "LoadShader.h"
 bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
-
 void printVec(glm::vec3 v) {
 	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ") ";
 }
@@ -315,12 +314,13 @@ bool loadAssimp(
 	Assimp::Importer importer;
 	printf("Loading file : %s...\n", path);
 	//aiProcess_Triangulate !!!
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices|aiProcess_CalcTangentSpace |aiProcess_GenUVCoords ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices| aiProcess_CalcTangentSpace |aiProcess_GenUVCoords ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf(stderr, importer.GetErrorString());
 		return false;
 	}
-	const aiMesh* mesh = scene->mMeshes[0]; // In this code we just use the 1st mesh
+	// TODO : In this code we just use the 1st mesh (for now)
+	const aiMesh* mesh = scene->mMeshes[0]; 
 	// Fill vertices positions
 	//std::cout << "Number of vertices :" << mesh->mNumVertices << "\n";
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++) {

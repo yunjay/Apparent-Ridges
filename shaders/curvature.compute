@@ -88,22 +88,26 @@ void main(){
 
     //Set normal, tangent, bitangent per face
     vec3 faceTangent = edges[0];
-    vec3 faceNormal = normalize(cross(edges[0],edges[1]));
+    //vec3 faceNormal = normalize(cross(edges[0],edges[1]));
+    vec3 faceNormal = normalize(cross(edges[1],edges[0]));
+    if(dot(faceNormal,normalsOnFace[0])<0.0){faceNormal = -faceNormal}
     vec3 faceBitangent = normalize(cross(faceNormal,faceTangent));
 
-    //estimate curvature over normals
+    //estimate curvature on face over normals finite difference
+    // m : 
+    // w :
     float m[3] = { 0, 0, 0 };
 	float w[3][3] = { {0,0,0}, {0,0,0}, {0,0,0} };
 	for (int i = 0; i < 3; i++) {
-            //estimate the tensor
+            //using the tangent - bitangent as uv coords
 			float u = dot(edges[i],faceTangent);
 			float v = dot(edges[i],faceBitangent);
 			w[0][0] += u*u;
 			w[0][1] += u*v;
 			w[2][2] += v*v;
 
-            int prev = (i+2) % 3;
-            int next = (i+1) % 3;
+            uint prev = (i+2) % 3;
+            uint next = (i+1) % 3;
             // finite difference for dn
 			vec3 dn = normalsOnFace[prev] - normalsOnFace[next];
 			float dnu = dot(dn,faceTangent);
@@ -115,7 +119,8 @@ void main(){
 		}
 	w[1][1] = w[0][0] + w[2][2];
 	w[1][2] = w[0][1];
-    //solve least squares
+
+    //Solve least squares!
     float diagonal[3] = {0,0,0};
     //LDLT Decomposition
     float d0 = w[0][0];
@@ -131,7 +136,7 @@ void main(){
     w[2][0] = w[0][2];
     w[2][1] = w[1][2] - l10 * w[2][0];
 
-    //Solve with LDLT decomposition
+    //Solve for LDLT decomposition
     for (int i =0;i<3;i++){
         float sum = m[i];
         for(int j=0;j<i;j++){
@@ -146,7 +151,7 @@ void main(){
         }
         m[i] -= sum * diagonal[i];
     }
-    //
+    //Curvature tensor
     float curv1[3] ={0.0, 0.0, 0.0};
     float curv12[3] ={0.0, 0.0, 0.0};
     float curv2[3] ={0.0, 0.0, 0.0};
