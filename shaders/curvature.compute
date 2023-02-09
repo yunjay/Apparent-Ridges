@@ -14,11 +14,12 @@ but I'll be using SSBOs
 //You can't access VBOs inside compute shdaers.
 //vec4 for SSBOs as vec3's are formatted strangely.
 //SSBO for principal directions
-layout(binding = 7, std430) writeonly buffer PDBuffer{
+//layout(binding = 7, std430) writeonly buffer PDBuffer{
+layout(binding = 7, std430)  buffer PDBuffer{
     vec4 PDs[];
 };
 //SSBO for principal curvatures
-layout(binding = 8, std430) writeonly buffer curvatureBufffer{
+layout(binding = 8, std430)  buffer curvatureBufffer{
     float curvatures[];
 };
 // so we'll be indexing vertices using global index with /3 and %3 I guess?
@@ -90,7 +91,7 @@ void main(){
     vec3 faceTangent = edges[0];
     //vec3 faceNormal = normalize(cross(edges[0],edges[1]));
     vec3 faceNormal = normalize(cross(edges[1],edges[0]));
-    if(dot(faceNormal,normalsOnFace[0])<0.0){faceNormal = -faceNormal}
+    if(dot(faceNormal,normalsOnFace[0])<0.0){faceNormal = -faceNormal;}
     vec3 faceBitangent = normalize(cross(faceNormal,faceTangent));
 
     //estimate curvature on face over normals finite difference

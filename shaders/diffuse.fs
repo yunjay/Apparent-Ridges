@@ -11,6 +11,7 @@ in vec2 TexCoords;
 
 out vec4 color;
 
+uniform vec3 viewPos;
 uniform Light light;
 void main() {
     // diffuse
@@ -19,6 +20,14 @@ void main() {
     vec3 lightDir = normalize(light.position - FragPos);
     float diff = max(dot(norm, lightDir), 0.0); //cos
     //vec3 diffuse = light.diffuse * diff * high;
-    
-    color = vec4( (diff + ambient) * vec3(1.0), 1.0f);
+     // specular
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(-lightDir, norm);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0f);
+    vec3 specular;
+    if(dot(lightDir,norm)>=0){
+        specular = vec3(1.0,1.0,1.0)* spec ;
+	} else specular =vec3(0,0,0); 
+
+    color = vec4( (diff + ambient+specular) * vec3(1.0), 1.0f);
 }

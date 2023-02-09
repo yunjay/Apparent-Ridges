@@ -40,8 +40,6 @@ int main()
     int lineWidth = 1;
     float thresholdScale = 1.0f;
 
-    glm::vec3 test = glm::vec3(glm::vec4(1.0f, 2.0f, 3.0f, 4.0f));
-    std::cout << "vec3(vec4(1,2,3,4)) : " <<test.x<<" "<<test.y<<" " << test.z << "\n";
 
     // glfw: initialize and configure
     // MIND THE VERSION!!!
@@ -121,10 +119,13 @@ int main()
 
     //view
     glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 1.0f);
+    
+    glm::vec3 viewDir = glm::vec3(0.0f, 0.0f, -1.0f);
     //light settings
     glm::vec3 lightPosInit = glm::vec3(-1.0f, 1.0f, 1.5f);
     glm::vec3 lightPos = lightPosInit;
     glm::vec3 lightDiffuse = glm::vec3(1, 1, 1);
+    glm::vec3 lightSpecular = glm::vec3(1, 1, 1);
 
 
 
@@ -165,7 +166,7 @@ int main()
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
 
-        //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);
+        //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);   
 
         //ImGui::SliderFloat("Brightness", &diffuse, 0.0f, 2.0f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
@@ -194,12 +195,13 @@ int main()
 
         model = glm::scale(model, glm::vec3(currentModel->modelScaleFactor) );
         model = glm::translate(model, (-1.0f * currentModel->center));
-        glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 view = glm::lookAt(cameraPos, viewDir, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "model"), 1, GL_FALSE, &model[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "view"), 1, GL_FALSE, &view[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+        glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
         if (ridgesOn) {
             glUniform3f(glGetUniformLocation(apparentRidges,"viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
             glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),currentModel->minDistance*thresholdScale);
@@ -208,7 +210,7 @@ int main()
         if (PDsOn) {
             //Render Principal Directions
             glUseProgram(maxPDShader);
-            glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), 0.5f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
+            glUniform1f(glGetUniformLocation(maxPDShader, "magnitude"), 0.02f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(maxPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
@@ -217,7 +219,7 @@ int main()
             currentModel->render(maxPDShader);
 
             glUseProgram(minPDShader);
-            glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), 0.5f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
+            glUniform1f(glGetUniformLocation(minPDShader, "magnitude"), 0.02f* PDLengthScale * currentModel->modelScaleFactor * modelSize);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "model"), 1, GL_FALSE, &model[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "view"), 1, GL_FALSE, &view[0][0]);
             glUniformMatrix4fv(glGetUniformLocation(minPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);

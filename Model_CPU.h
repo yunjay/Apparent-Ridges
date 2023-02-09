@@ -11,12 +11,12 @@
 #include <assimp/postprocess.h>     
 
 #include "LoadShader.h"
-bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
+bool loadAssimp(const char* path, std::vector<glm::vec3>& out_vertices, std::vector<glm::vec3>& out_normals, std::vector<unsigned int>& out_indices);
 void printVec(glm::vec3 v) {
-	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ") ";
+	std::cout << "(" << v.x << ", " << v.y << ", " << v.z << ") ";
 }
 void printVec(glm::vec4 v) {
-	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ") ";
+	std::cout << "(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ") ";
 }
 
 class Model {
@@ -28,7 +28,7 @@ public:
 
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
-	std::vector<std::array<unsigned int,3>> faces;
+	std::vector<std::array<unsigned int, 3>> faces;
 	std::vector<glm::vec2> textureCoordinates;
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
@@ -36,7 +36,7 @@ public:
 
 	std::vector<glm::vec4> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
-	
+
 	std::vector<glm::vec4> maxPDs;
 	std::vector<glm::vec4> minPDs;
 	std::vector<GLfloat> maxCurvs;
@@ -56,7 +56,7 @@ public:
 
 	Model(std::string path) {
 		this->path = path;
-		if (!this->loadAssimp()) { std::cout << "Model at "<<path<<" not loaded!\n"; };
+		if (!this->loadAssimp()) { std::cout << "Model at " << path << " not loaded!\n"; };
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
@@ -105,7 +105,7 @@ public:
 		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 		// Principal Directions / Principal Curvatures (As VBOs)
-		if(this->curvaturesCalculated){
+		if (this->curvaturesCalculated) {
 			glGenBuffers(1, &maxPDVBO); //3
 			glGenBuffers(1, &minPDVBO); //4
 			glGenBuffers(1, &maxCurvVBO); //5
@@ -116,7 +116,7 @@ public:
 			//buffer -> handle, offset -> start of data to read, size -> size of data to be read, *data -> pointer to return data
 
 			//PDs.push_back(glm::vec4(0.0));
-			std::cout <<"Pds size : "<< PDs.size() << "\n";
+			std::cout << "Pds size : " << PDs.size() << "\n";
 			/*
 			for (int dbg = 0; dbg < 4; dbg++) {
 				std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
@@ -128,38 +128,38 @@ public:
 			//glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
 			glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
 			for (int dbg = 0; dbg < 4; dbg++) {
-				std::cout << "PDs["<< dbg <<"] "; printVec(PDs[dbg]); std::cout << "\n";
+				std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
 				std::cout << "PDs[" << vertices.size() + dbg << "] "; printVec(PDs[vertices.size()]); std::cout << "\n";
-				std::cout << "PDs[" << PDs.size() - dbg-1 << "] "; printVec(PDs[PDs.size() - dbg -1 ]); std::cout << "\n";
+				std::cout << "PDs[" << PDs.size() - dbg - 1 << "] "; printVec(PDs[PDs.size() - dbg - 1]); std::cout << "\n";
 			}
 
 
-			glGetNamedBufferSubData(CurvatureBuffer,0,PrincipalCurvatures.size()*sizeof(GLfloat),PrincipalCurvatures.data());
+			glGetNamedBufferSubData(CurvatureBuffer, 0, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data());
 			for (int dbg = 0; dbg < 4; dbg++) {
-				std::cout << "PrincipalCurvatures["<< dbg <<"] " << PrincipalCurvatures[dbg] << "\n";
-				std::cout << "PrincipalCurvatures["<< vertices.size() + dbg <<"] " << PrincipalCurvatures[vertices.size() + dbg] << "\n";
+				std::cout << "PrincipalCurvatures[" << dbg << "] " << PrincipalCurvatures[dbg] << "\n";
+				std::cout << "PrincipalCurvatures[" << vertices.size() + dbg << "] " << PrincipalCurvatures[vertices.size() + dbg] << "\n";
 			}
 
 			//Send PDs / PCs as attrbutes per vertex, just to uncomplicate some of this process.
-			glBindBuffer(GL_ARRAY_BUFFER,maxPDVBO);
-			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),PDs.data(),GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, maxPDVBO);
+			glBufferData(GL_ARRAY_BUFFER, PDs.size() / 2 * sizeof(glm::vec4), PDs.data(), GL_STATIC_DRAW);
 			glEnableVertexAttribArray(3);
-			glVertexAttribPointer(3,4,GL_FLOAT,GL_FALSE,0,(void*)0); //Our PDs are vec4s due to SSBO reasons.
+			glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, (void*)0); //Our PDs are vec4s due to SSBO reasons.
 
-			glBindBuffer(GL_ARRAY_BUFFER,minPDVBO);
-			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),&PDs[this->vertices.size()],GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, minPDVBO);
+			glBufferData(GL_ARRAY_BUFFER, PDs.size() / 2 * sizeof(glm::vec4), &PDs[this->vertices.size()], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(4);
-			glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-			glBindBuffer(GL_ARRAY_BUFFER,maxCurvVBO);
-			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),PrincipalCurvatures.data(),GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, maxCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), PrincipalCurvatures.data(), GL_STATIC_DRAW);
 			glEnableVertexAttribArray(5);
-			glVertexAttribPointer(5,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-			glBindBuffer(GL_ARRAY_BUFFER,minCurvVBO);
-			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),&PrincipalCurvatures[this->vertices.size()],GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, minCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), &PrincipalCurvatures[this->vertices.size()], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(6);
-			glVertexAttribPointer(6,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 
 			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
@@ -183,8 +183,8 @@ public:
 		glBindVertexArray(VAO);
 
 		//Rebind SSBOs
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, PDBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, CurvatureBuffer);
 
 
 
@@ -200,7 +200,7 @@ public:
 		//simple implemetation calculating model boundary box size
 		float maxX = vertices[0].x, maxY = vertices[0].y, maxZ = vertices[0].z;
 		float minX = vertices[0].x, minY = vertices[0].y, minZ = vertices[0].z;
-		
+
 		for (int i = 1; i < vertices.size(); i++) {
 			(vertices[i].x > maxX) ? maxX = vertices[i].x : 0;
 			(vertices[i].y > maxY) ? maxY = vertices[i].y : 0;
@@ -212,7 +212,7 @@ public:
 		//center of model
 		this->center = glm::vec3((maxX + minX) / 2.0f, (maxY + minY) / 2.0f, (maxZ + minZ) / 2.0f);
 		this->diagonalLength = glm::length(glm::vec3(maxX - minX, maxY - minY, maxZ - minZ));
-		this->modelScaleFactor = 1.0f/diagonalLength;
+		this->modelScaleFactor = 1.0f / diagonalLength;
 	}
 	float getMinDistance() {
 		float minDist = glm::length(vertices[0] - vertices[1]);
@@ -225,87 +225,8 @@ public:
 	//Calculates principal curvatures and principal directions per vertex
 	//Using a compute shader with SSBOs
 	void setupCurvatures() {
-		//generate ssbo to use in compute shader
-		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
-		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
-		GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
-		
-		//So we need to initially compute by face.
-		//Load compute shader
-		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
+		//Computed with CPU c++ code only for comparison with GPU compute shaders
 
-		
-		//resize vertices for curvature values resize(num,value)
-		PDs.resize(vertices.size()*2,glm::vec4(0));
-		PrincipalCurvatures.resize(vertices.size()*2,0.0f);
-
-		//setup SSBOs
-		// STD vector with SSBOs, is it ok or not?\
-		//  &[0] -> .data() 
-		//gen -> bind (set to GL state) -> bufferData
-		//for writing
-		glGenBuffers(1, &PDBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), PDs.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
-
-		glGenBuffers(1, &CurvatureBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), PrincipalCurvatures.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
-
-		//for reading
-		//Vertex positions
-		glGenBuffers(1, &vertexStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, vertexStorageBuffer);
-		std::vector<glm::vec4> vertexStorage;
-		for(auto v : vertices){ //make vec4s from vec3s
-			vertexStorage.push_back(glm::vec4(v,0.0f));
-		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size() * sizeof(glm::vec4), vertexStorage.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,9,vertexStorageBuffer);
-
-		//norrmals
-		glGenBuffers(1, &normalStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, normalStorageBuffer);
-		std::vector<glm::vec4> normalStorage;
-		for(auto v : normals){
-			normalStorage.push_back(glm::vec4(v,0.0f));
-		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size() * sizeof(glm::vec4), normalStorage.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,10,normalStorageBuffer);
-		
-		glGenBuffers(1, &indexStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,11,indexStorageBuffer);
-
-
-		//Use compute shader
-		glUseProgram(curvatureCompute);
-		
-		//hmm.. we move by indices so send indicies size.
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "indicesSize"), this->indices.size());
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "verticesSize"), this->vertices.size());
-
-		//Dispatch -> run compute shader in GPU 
-		//As we have 1024 invocations per work group
-		glDispatchCompute(glm::ceil( (GLfloat(this->indices.size())/3.0f)/1024.0f ),1,1);
-
-		//Barrier to ensure coherency
-		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
-		
-		//kill "read only" SSBOs (vertex,normal,index SSBO)
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER,0); //unbind
-		glDeleteBuffers(1,&vertexStorageBuffer);
-		glDeleteBuffers(1,&normalStorageBuffer);
-		glDeleteBuffers(1,&indexStorageBuffer);
-		
-		std::cout<<"Curvatures for "<<this->path <<" calculated on compute shader.\n";
-		//is CUDA necessary?
-
-		this->curvaturesCalculated = true;
 
 	}
 
@@ -318,12 +239,12 @@ public:
 
 	bool loadAssimp() {
 		Assimp::Importer importer;
-		
+
 		if (!this->vertices.empty()) {
 			return false; //if not empty return
 		}
-		
-		std::cout<<"Loading file : "<<this->path<<".\n";
+
+		std::cout << "Loading file : " << this->path << ".\n";
 		//aiProcess_Triangulate !!!
 		const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 		if (!scene) {
@@ -379,7 +300,7 @@ public:
 		std::cout << "Number of normals : " << this->normals.size() << "\n";
 		std::cout << "Number of indices : " << this->indices.size() << "\n";
 		std::cout << "Number of faces : " << this->faces.size() << "\n";
-		
+
 
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
@@ -401,13 +322,13 @@ bool loadAssimp(
 	Assimp::Importer importer;
 	printf("Loading file : %s...\n", path);
 	//aiProcess_Triangulate !!!
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals| aiProcess_JoinIdenticalVertices| aiProcess_CalcTangentSpace |aiProcess_GenUVCoords ); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_CalcTangentSpace | aiProcess_GenUVCoords); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 	if (!scene) {
 		fprintf(stderr, importer.GetErrorString());
 		return false;
 	}
 	// TODO : In this code we just use the 1st mesh (for now)
-	const aiMesh* mesh = scene->mMeshes[0]; 
+	const aiMesh* mesh = scene->mMeshes[0];
 	// Fill vertices positions
 	//std::cout << "Number of vertices :" << mesh->mNumVertices << "\n";
 	for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
@@ -430,7 +351,7 @@ bool loadAssimp(
 			aiVector3D n = mesh->mNormals[i];
 			out_normals.push_back(glm::normalize(glm::vec3(n.x, n.y, n.z)));
 		}
-	}  
+	}
 	else {
 		//std::cout << "Model has no normals.\n";
 		//mesh->
