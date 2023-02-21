@@ -42,7 +42,10 @@ public:
 	std::vector<GLfloat> maxCurvs;
 	std::vector<GLfloat> minCurvs;
 
-
+	unsigned int numVertices;
+	unsigned int numNormals;
+	unsigned int numFaces;
+	unsigned int numIndices;
 
 	std::string path;
 	GLfloat diagonalLength = 0.0f;
@@ -106,39 +109,7 @@ public:
 
 		// Principal Directions / Principal Curvatures (As VBOs)
 		if (this->curvaturesCalculated) {
-			glGenBuffers(1, &maxPDVBO); //3
-			glGenBuffers(1, &minPDVBO); //4
-			glGenBuffers(1, &maxCurvVBO); //5
-			glGenBuffers(1, &minCurvVBO); //6
-
-			//Get data from SSBOs
-			//void glGetNamedBufferSubData(	GLuint buffer,GLintptr offset,GLsizeiptr size,void *data);
-			//buffer -> handle, offset -> start of data to read, size -> size of data to be read, *data -> pointer to return data
-
-			//PDs.push_back(glm::vec4(0.0));
-			std::cout << "Pds size : " << PDs.size() << "\n";
-			/*
-			for (int dbg = 0; dbg < 4; dbg++) {
-				std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
-				std::cout << "PDs[" << vertices.size() + dbg << "] "; printVec(PDs[vertices.size()]); std::cout << "\n";
-				std::cout << "PDs[" << PDs.size() - dbg << "] "; printVec(PDs[PDs.size() - 1]); std::cout << "\n";
-			}
-			*/
-
-			//glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
-			glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
-			for (int dbg = 0; dbg < 4; dbg++) {
-				std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
-				std::cout << "PDs[" << vertices.size() + dbg << "] "; printVec(PDs[vertices.size()]); std::cout << "\n";
-				std::cout << "PDs[" << PDs.size() - dbg - 1 << "] "; printVec(PDs[PDs.size() - dbg - 1]); std::cout << "\n";
-			}
-
-
-			glGetNamedBufferSubData(CurvatureBuffer, 0, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data());
-			for (int dbg = 0; dbg < 4; dbg++) {
-				std::cout << "PrincipalCurvatures[" << dbg << "] " << PrincipalCurvatures[dbg] << "\n";
-				std::cout << "PrincipalCurvatures[" << vertices.size() + dbg << "] " << PrincipalCurvatures[vertices.size() + dbg] << "\n";
-			}
+			
 
 			//Send PDs / PCs as attrbutes per vertex, just to uncomplicate some of this process.
 			glBindBuffer(GL_ARRAY_BUFFER, maxPDVBO);
@@ -225,8 +196,11 @@ public:
 	//Calculates principal curvatures and principal directions per vertex
 	//Using a compute shader with SSBOs
 	void setupCurvatures() {
-		//Computed with CPU c++ code only for comparison with GPU compute shaders
+		//Computed with CPU c++ code only for comparison with GPU compute shaders ----
+		//per face
+		for (int i = 0; i < this->numFaces; i++) {
 
+		}
 
 	}
 
@@ -235,7 +209,13 @@ public:
 		glDeleteBuffers()
 	}
 	*/
-
+	float compareVertices(std::vector<glm::vec3> v1, std::vector<glm::vec3> v2) {
+		float err = 0.0f;
+		for (int i = 0; i < v1.size();i++) {
+			err += glm::distance(v1[i],v2[i]);
+		}
+		return err;
+	}
 
 	bool loadAssimp() {
 		Assimp::Importer importer;
@@ -301,6 +281,10 @@ public:
 		std::cout << "Number of indices : " << this->indices.size() << "\n";
 		std::cout << "Number of faces : " << this->faces.size() << "\n";
 
+		this->numVertices = this->vertices.size();
+		this->numNormals = this->normals.size();
+		this->numFaces = this->faces.size();
+		this->numIndices = this->indices.size();
 
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;

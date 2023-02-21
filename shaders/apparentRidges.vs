@@ -1,4 +1,4 @@
-#version 430
+#version 460
 layout (location = 0) in vec3 inPosition;
 layout (location = 1) in vec3 inNormal;
 layout (location = 2) in vec2 inTexCoords;
@@ -13,17 +13,32 @@ layout(binding = 7, std430) readonly buffer PDBuffer
 layout(binding = 8, std430) readonly buffer curvatureBufffer{
     float curvatures[];
 };
-
+layout(binding = 20, std430) readonly buffer adjacentFacesBuffer{
+    int adjFaces[][20];
+};
+layout(binding = 21, std430) buffer q1Buffer{
+    float q1s[];
+};
+layout(binding = 22, std430) buffer t1Buffer{
+    vec2 t1s[];
+};
+layout(binding = 23, std430) buffer Dt1q1Buffer{
+    float Dt1q1s[];
+};
 out VertexData{
     vec3 normal;
     vec3 pos;
     vec2 texCoords;
     float normalDotView; //normal dot viewdirection
     vec3 viewDirection;
-    vec4 maxPrincpal;
-    vec4 minPrincipal;
+    vec3 maxPrincpal;
+    vec3 minPrincipal;
     float maxCurvature;
     float minCurvature;
+    float q1;
+    vec2 t1;
+    float Dt1q1;
+    uint id;
 } vertexOut;
 
 uniform mat4 model;
@@ -32,22 +47,33 @@ uniform mat4 projection;
 
 uniform vec3 viewPosition;
 
+uniform float threshold;
 void main() {
-    gl_Position = projection * view *  model * vec4(inPosition, 1.0f);
-    vec3 position = vec3(model * vec4(inPosition, 1.0f)); 
-    vertexOut.Pos = position;
-
+    gl_Position = projection * view *  model * vec4(inPosition, 1.0);
+    vec3 position = vec3(model * vec4(inPosition, 1.0)); 
+    //position = vec3(projection * view *  model * vec4(inPosition, 1.0));
     vec3 normal = mat3(transpose(inverse(model))) * inNormal;
-    vertexOut.normal = normal;
-    vertexOut.texCoords = inTexCoords;  
     
     //I think Assimp normalizes the normals anyway.
     vec3 viewDir = normalize(viewPosition - position);
-    vertexOut.normalDotView = dot(viewDir,normal);
+    
+    float ndotv = dot(viewDir,normal);
+    
+
+    vertexOut.pos = position;
+    vertexOut.normal = normal;
+    vertexOut.texCoords = inTexCoords;  
+    vertexOut.normalDotView = ndotv;
     vertexOut.viewDirection = viewDir;
 
-    vertexOut.maxPrincpal = maxPD;
-    vertexOut.minPrincipal = minPD;
+    vertexOut.maxPrincpal = maxPD.xyz;
+    vertexOut.minPrincipal = minPD.xyz;
     vertexOut.maxCurvature = maxCurv;
     vertexOut.minCurvature = minCurv;
+
+    vertexOut.q1 = q1s[gl_VertexID];
+    vertexOut.t1 = t1s[gl_VertexID];
+    vertexOut.Dt1q1 = Dt1q1s[gl_VertexID];
+
+    vertexOut.id = gl_VertexID;
 }

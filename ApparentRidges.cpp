@@ -34,6 +34,7 @@ glm::vec3 lineColor(1.0f);
 
 bool ridgesOn = true;
 bool PDsOn = false;
+bool drawFaded = false;
 
 int main()
 {
@@ -78,7 +79,9 @@ int main()
     // configure global opengl state
     //z buffer
     glEnable(GL_DEPTH_TEST);
-
+    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
     //IMGui init    
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -89,28 +92,24 @@ int main()
 
     //Load Models
     std::vector<Model> models;
-    /*
-    Model bunny(".\\models\\stanford-bunny.obj");
-    Model lucy(".\\models\\lucy.obj");
-    Model david(".\\models\\rapid.obj");
-    Model brain(".\\models\\brain-simple-mesh.obj");
-    Model dragon(".\\xyzrgp_dragon.obj");
-    Model golfball(".\\models\\GolfBallOBJ.obj");
-    order causes no bugs
-    */
+    //order causes no bugs
+    //models.push_back(Model(".\\models\\Zagato.obj"));
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
-    //models.push_back(Model(".\\models\\brain-simple-mesh.obj"));
     models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
-    models.push_back(Model(".\\models\\GolfBallOBJ.obj"));
+    models.push_back(Model(".\\models\\chips.obj"));
+    models.push_back(Model(".\\models\\guitar.3DS"));
+    /*
+    */
+    
 
     Model* currentModel = &models[0];
 
     //Load Shaders
     GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
-    //GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
-    GLuint apparentRidges = diffuse;
+    GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
+    //GLuint apparentRidges = diffuse;
     GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vs",".\\shaders\\PDmax.fs",".\\shaders\\PDmax.gs");
     GLuint minPDShader = loadShader(".\\shaders\\PDmin.vs",".\\shaders\\PDmin.fs",".\\shaders\\PDmin.gs");
 
@@ -153,21 +152,19 @@ int main()
         ImGui::Begin("Apparent Ridges");
         ImGui::Checkbox("Line Drawing with Apparent Ridges", &ridgesOn);
         ImGui::Checkbox("Principal Directions", &PDsOn);
-        const char* listboxItems[] = { "Bunny", "Lucy", "David", /*"Brain",*/ "Dragon", "Golfball"};
+        ImGui::Checkbox("Draw Faded Lines", &drawFaded);
+        const char* listboxItems[] = { "Bunny", "Lucy", "David", "Dragon", "Chips", "Guitar"};
         static int currentlistboxItem = 0;
         ImGui::ListBox("Model", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
-
 
         ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
-        ImGui::SliderFloat("Threshold", &thresholdScale, 0.1f, 10.0f);
+        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 10.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
-
         //ImGui::SliderFloat("Rotate Global Light Source", &lightDegrees, 0.0f, 360.0f);   
-
         //ImGui::SliderFloat("Brightness", &diffuse, 0.0f, 2.0f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
@@ -175,7 +172,8 @@ int main()
         ImGui::End();
 
 
-        if (ridgesOn) { currentShader = &apparentRidges; } else { currentShader = &diffuse; }
+        if (ridgesOn) { currentShader = &apparentRidges; currentModel->apparentRidges = true; }
+        else { currentShader = &diffuse; currentModel->apparentRidges = false;}
 
         glUseProgram(*currentShader);
 
@@ -203,9 +201,23 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
         glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
         if (ridgesOn) {
-            glUniform3f(glGetUniformLocation(apparentRidges,"viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
-            glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),currentModel->minDistance*thresholdScale);
+            currentModel->apparentRidges = true;
+            glUseProgram(currentModel->viewDepCurvatureCompute);
+            glUniform3f(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            
+            glUseProgram(currentModel->Dt1q1Compute);
+            glUniform3f(glGetUniformLocation(currentModel->Dt1q1Compute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            
+            glUseProgram(apparentRidges);
+            //threshold is scaled to the reciprocal of feature size
+            if(currentModel->minDistance>1.0f)
+                glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),thresholdScale/(currentModel->minDistance* currentModel->minDistance));
+            else
+                glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), thresholdScale * currentModel->minDistance);
+
             glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
+            glUniform3f(glGetUniformLocation(apparentRidges, "backgroundColor"), background.x, background.y, background.z);
+            glUniform1i(glGetUniformLocation(apparentRidges, "drawFaded"), drawFaded);
         }
         if (PDsOn) {
             //Render Principal Directions

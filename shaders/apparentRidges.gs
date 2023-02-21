@@ -1,4 +1,4 @@
-#version 430
+#version 460
 layout(triangles) in;
 layout (line_strip, max_vertices=6) out;
 layout(binding = 7, std430) readonly buffer PDBuffer 
@@ -15,91 +15,179 @@ in VertexData{
     vec2 texCoords;
     float normalDotView; //normal dot viewdirection
     vec3 viewDirection;
-    vec4 maxPrincpal;
-    vec4 minPrincipal;
+    vec3 maxPrincpal;
+    vec3 minPrincipal;
     float maxCurvature;
     float minCurvature;
-} geometryIn[];
-
+    float q1;
+    vec2 t1;
+    float Dt1q1;
+    uint id;
+} geometryIn[]; //instance name can be different from vertex shader stage
+//gl_in[] for gl_PerVertex which carries gl_Position
+//geometryIn[] for the output we made
 uniform vec3 viewPosition;
 uniform float threshold;
 uniform mat4 projection;
-/*
-out VertexData{
-    out vec3 Normal;
-    out vec3 FragPos;
-    out vec2 TexCoords;
-} geometryOut[];
-*/
+uniform bool drawFaded;
+
+uniform mat4 view;
+
+const float epsilon = 1e-6;
+
+out float fade;
 //emit two vertices for each line...
+void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
+             float emax0, float emax1, float emax2,
+             float kmax0, float kmax1, float kmax2,
+             const vec3 tmax0, const vec3 tmax1, const vec3 tmax2,
+             bool to_center, bool do_test){
+    float w10 = abs(emax0) / (abs(emax0) + abs(emax1));
+    float w01 = 1.0 - w10;
+    
+    vec3 p01 = w01 * geometryIn[v0].pos + w10 * geometryIn[v1].pos;
+    float k01 = abs(w01 * kmax0 + w10 * kmax1);
+
+    vec3 p12;
+    float k12;
+    if (to_center) {
+      // Connect first point to center of triangle
+      p12 = (geometryIn[v0].pos +
+             geometryIn[v1].pos +
+             geometryIn[v2].pos) / 3.0;
+      k12 = abs(kmax0 + kmax1 + kmax2) / 3.0;
+    } else {
+        // Connect first point to second one (on next edge)
+        float w21 = abs(emax1) / (abs(emax1) + abs(emax2));
+        float w12 = 1.0 - w21;
+        p12 = w12 * geometryIn[v1].pos + w21 * geometryIn[v2].pos;
+        k12 = abs(w12 * kmax1 + w21 * kmax2);
+    }
+
+   // Don't draw below threshold
+   k01 -= threshold;
+   if (k01 < 0.0)
+      k01 = 0.0;
+   k12 -= threshold;
+   if (k12 < 0.0)
+      k12 = 0.0;
+
+   // Skip lines that you can't see...
+   if (k01 == 0.0 && k12 == 0.0)
+      return;
+
+   // Perform test: do the tmax-es point *towards* the segment? (Fig 6)
+   if (do_test) {
+      // Find the vector perpendicular to the segment (p01 <-> p12)
+      vec3 perp =cross( 0.5*cross((geometryIn[v1].pos-geometryIn[v0].pos),(geometryIn[v2].pos-geometryIn[v0].pos)), p01 - p12);
+      // We want tmax1 to point opposite to perp, and
+      // tmax0 and tmax2 to point along it.  Otherwise, exit out.
+      if ((dot(tmax0,perp)) <= 0.0 ||
+          (dot(tmax1,perp)) >= 0.0 ||
+          (dot(tmax2,perp)) <= 0.0)
+         return;
+   }
+
+   // Faded lines
+   if (drawFaded) {
+      k01 /= (k01 + threshold);
+      k12 /= (k12 + threshold);
+   } else {
+      k01 = k12 = 1.0;
+   }
+
+    // Draw the line segment
+    /*
+    glColor4f(currcolor[0], currcolor[1], currcolor[2], k01);
+    glVertex3fv(p01);
+    glColor4f(currcolor[0], currcolor[1], currcolor[2], k12);
+    glVertex3fv(p12);
+    */
+    
+    //gl_Position = vec4(p01,1.0);
+    gl_Position = projection * view *vec4(p01,1.0);
+    fade = k01;
+    EmitVertex();
+    //gl_Position = vec4(p12,1.0);
+    gl_Position = projection * view *vec4(p12,1.0);
+    fade = k12;
+    EmitVertex();
+    EndPrimitive();
+
+}
 void main() {
-    //gl_in[0]; 
+    for(int i =0;i<3;i++){
+        if(geometryIn[i].normalDotView<=-0.02) return;
+    }
+
+    //geometryIn[0],1,2; 
     //Compute principal view-dependent curvatures and principal view-dependent curv directions at each vertex 
     //For vertex 0 1 2 of the triangle face
     //q1 : max view-dep curvature, t1 = max view-dep curvature direction
-    float q1[3]={0.0,0.0,0.0};
-    vec2 t1[3]={vec2(0.0),vec2(0.0),vec2(0.0)};
-    float Dt1q1[3]={0.0,0.0,0.0};
-    
-    //First we compute the max view dependent curvature and direction at each vertex.------------------
-    for(int i=0; i<3; i++){
-        //basis with principal directions projected to viewDirection
-        float u = dot(gl_in[i].viewDirection,vec3(gl_in[i].maxPrincipal));
-        float v = dot(gl_in[i].viewDirection,vec3(gl_in[i].minPrincipal));
-        float u2 = u*u;
-        float v2 = v*v;
-        // Kr * sin^2
-        float kr = gl_in[i].maxCurvature * u2 + gl_in[i].minCurvature * v2;
-        float csc2 = 1.0/(u2+v2);
+    const float kmax0 = geometryIn[0].q1;
+    const float kmax1 = geometryIn[1].q1;
+    const float kmax2 = geometryIn[2].q1;
+    if (kmax0 <= threshold && kmax1 <= threshold && kmax2 <= threshold) //initial filter
+        return;
+   // tmax are principal directions of view-dependent curvature,
+   // flipped to point in the direction of increasing curvature.
+   // emax are derivatives of max curvatures in max direction
+    const float emax0 = geometryIn[0].Dt1q1;
+    const float emax1 = geometryIn[1].Dt1q1;
+    const float emax2 = geometryIn[2].Dt1q1;
 
-        //Q is the view dependent curvature tensor
-        //Why it is computed this way is beyond me..
-        float sec_min1 = 1.0/abs(gl_in[i].normalDotView) - 1.0;
-        float Q11 = gl_in[i].maxCurvature * (1.0 + sec_min1 * u2 *csc2);
-        float Q12 = gl_in[i].maxCurvature * (sec_min1 * uv*csc2);
-        float Q12 = gl_in[i].maxCurvature * (sec_min1 * uv*csc2);
-        float Q22 = gl_in[i].maxCurvature * (1.0 + sec_min1 * v2*csc2);
+    vec3 world_t1_0 = geometryIn[0].t1[0] * geometryIn[0].maxPrincpal +
+                      geometryIn[0].t1[1] * geometryIn[0].minPrincipal;
+    vec3 world_t1_1 = geometryIn[1].t1[0] * geometryIn[1].maxPrincpal +
+                      geometryIn[1].t1[1] * geometryIn[1].minPrincipal;
+    vec3 world_t1_2 = geometryIn[2].t1[0] * geometryIn[2].maxPrincpal +
+                      geometryIn[2].t1[1] * geometryIn[2].minPrincipal;
+    vec3 tmax0 = geometryIn[0].Dt1q1 * world_t1_0;
+    vec3 tmax1 = geometryIn[1].Dt1q1 * world_t1_1;
+    vec3 tmax2 = geometryIn[2].Dt1q1 * world_t1_2;
 
-        //Max singular value = max view-dependent curvature, direction
-        //Can't use eigens... why exactly?
-        //so we use Q^TQ (Symmetric matrix)
-        float QTQ1  = Q11 * Q11 + Q21 * Q21;
-        float QTQ12 = Q11 * Q12 + Q21 * Q22;
-        float QTQ2  = Q12 * Q12 + Q22 * Q22;
-
-        //Compute largest eigens of QTQ aka singular values
-        //q1 : max view-dep curvature, t1 = max view-dep curvature direction
-        q1[i] = 0.5 * (QTQ1 + QTQ2);
-        if(q1[i] > 0.0)
-            q1[i] += sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
-        else
-            q1[i] -= sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
-        
-        t1[i] = normalize(vec2(QTQ2-q1,-QTQ12));
-    }
-
-    //Compute Dt1q1, the derivative of max view-dependent curvature ------------------------------
-    for(int i =0 ;i<3;i++){
-        vec3 v0 = gl_in[0].pos;
-        float currentVertexCurv = q1[i];
-        //world coords
-        vec3 world_t1 = t1[i][0] * gl_in[i].maxPrincipal + t1[i][1] * gl_in[i].minPrincipal;
-        vec3 world_t2 = cross(gl_in[i].normal,world_t1);
-
-        float v0_dot_t2 = dot(v0,world_t2);
-        int n =0;
-        //Adjacent faces fuck
-        // maybe finite differnce the view-dep curv at the vertex (v0) and at the midpoint between v1 and v2
-         
-
-
-    }
-
-
-
-
-
-
-
+    //"zero crossing" if the tmaxes along an edge point in opposite directions
+    bool zeroCross01 = ((dot(tmax0,tmax1)) <= 0.0);
+    bool zeroCross12 = ((dot(tmax1,tmax2)) <= 0.0);
+    bool zeroCross20 = ((dot(tmax2,tmax0)) <= 0.0);
+    if (int(zeroCross01) + int(zeroCross12) + int(zeroCross20) < 2)
+        return;
+    //Draw lines
+    if (!zeroCross01) {
+      drawApparentRidgeSegment(1, 2, 0,
+                    emax1, emax2, emax0,
+                    kmax1, kmax2, kmax0,
+                    tmax1, tmax2, tmax0,
+                    false, true);
+   } else if (!zeroCross12) {
+      drawApparentRidgeSegment(2, 0, 1,
+                   emax2, emax0, emax1,
+                   kmax2, kmax0, kmax1,
+                   tmax2, tmax0, tmax1,
+                   false, true);
+   } else if (!zeroCross20) {
+      drawApparentRidgeSegment(0, 1, 2,
+                   emax0, emax1, emax2,
+                   kmax0, kmax1, kmax2,
+                   tmax0, tmax1, tmax2,
+                   false, true);
+   } else {
+      // All three edges have crossings -- connect all to center
+      drawApparentRidgeSegment(1, 2, 0,
+                   emax1, emax2, emax0,
+                   kmax1, kmax2, kmax0,
+                   tmax1, tmax2, tmax0,
+                     true, true);
+      drawApparentRidgeSegment(2, 0, 1,
+                   emax2, emax0, emax1,
+                   kmax2, kmax0, kmax1,
+                   tmax2, tmax0, tmax1,
+                   true, true);
+      drawApparentRidgeSegment(0, 1, 2,
+                   emax0, emax1, emax2,
+                   kmax0, kmax1, kmax2,
+                   tmax0, tmax1, tmax2,
+                   true, true);
+   }
 }
 

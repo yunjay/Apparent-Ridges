@@ -1,0 +1,200 @@
+#version 430 core 
+//Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
+//defines the size of the local work group. Max is 1024 on my device (2060)
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+layout(binding = 7, std430)  buffer PDBuffer{
+    vec4 PDs[];
+};
+//SSBO for principal curvatures
+layout(binding = 8, std430)  buffer curvatureBufffer{
+    float curvatures[];
+};
+// so we'll be indexing vertices using global index with /3 and %3 I guess?
+layout(binding = 9, std430) readonly buffer vertexBuffer{
+    vec4 vertices[];
+};
+layout(binding = 10, std430) readonly buffer normalBuffer{
+    vec4 normals[];
+};
+layout(binding = 11, std430) readonly buffer indexBuffer{
+    uint indices[];
+};
+layout(binding = 12, std430)  buffer curv1Bufffer{
+    float curv1buffer[];
+};
+layout(binding = 13, std430)  buffer curv2Bufffer{
+    float curv2buffer[];
+};
+layout(binding = 14, std430)  buffer curv12Bufffer{
+    float curv12buffer[];
+};
+uniform uint indicesSize;
+uniform uint verticesSize;
+//out parameters can be used like passed references for output of functions in GLSL
+void rotCoordSys(vec3 old_u,  vec3 old_v,
+                          vec3 new_norm,
+                          out vec3 new_u, out vec3 new_v)
+{
+	new_u = old_u;
+	new_v = old_v;
+	vec3 old_norm = cross(old_u,old_v);
+	float ndot = dot(old_norm, new_norm);
+	if (ndot <= -1.0f) {
+		new_u = -new_u;
+		new_v = -new_v;
+		return;
+	}   
+	// Perpendicular to old_norm and in the plane of old_norm and new_norm
+	vec3 perp_old = new_norm - ndot * old_norm;
+	// Perpendicular to new_norm and in the plane of old_norm and new_norm
+	// vec perp_new = ndot * new_norm - old_norm;
+	// perp_old - perp_new, with normalization constants folded in
+	vec3 dperp = 1.0f / (1 + ndot) * (old_norm + new_norm);
+	// Subtracts component along perp_old, and adds the same amount along
+	// perp_new.  Leaves unchanged the component perpendicular to the
+	// plane containing old_norm and new_norm.
+	new_u -= dperp * (dot(new_u, perp_old));
+	new_v -= dperp * (dot(new_v, perp_old));
+}
+//Runs per vertex
+void main(){
+    uint invocationID = gl_GlobalInvocationID.x; //starts with 0
+    if(invocationID > verticesSize)return;
+
+    vec3 normal = normals[invocationID].xyz;
+
+    float curv1 = curv1buffer[invocationID];
+    float curv2 = curv2buffer[invocationID];
+    float curv12 = curv12buffer[invocationID];
+
+
+    vec3 pd1 = PDs[invocationID].xyz; //id
+    vec3 pd2 = PDs[invocationID+verticesSize].xyz; //id+size
+
+    vec3 oldU ;
+    vec3 oldV ;
+    rotCoordSys(pd1,pd2,normal,oldU,oldV);
+    //compute principal directions and curvatures with the curvature tensor (2FF) by eigens
+    //Usually on computers eigenvectors / eigen  values are calculated with iterative QR decomposition 
+    // As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
+    float c = 1, s = 0, tt = 0;
+	if (curv12 != 0.0) {
+		// Jacobi rotation to diagonalize
+		float h = 0.5 * (curv2 - curv1) / curv12;
+		tt = (h < 0.0) ?
+			1.0 / (h - sqrt(1.0 + h*h)) :
+			1.0 / (h + sqrt(1.0 + h*h));
+		c = 1.0 / sqrt(1.0 + tt*tt);
+		s = tt * c;
+	}
+
+	curv1 = curv1 - tt * curv12;
+	curv2 = curv2 + tt * curv12;
+    //ensure max curv goes to curv1
+	if (abs(curv1) >= abs(curv2)) {
+		pd1 = c*oldU - s*oldV;
+	} else {
+        float tmp=curv1;
+        curv1=curv2;curv2=tmp;
+		pd1 = s*oldU + c*oldV;
+	}
+	pd2 = cross(normal,pd1);
+   
+    // write max principal directions first, then min principal directions. (+ size)
+    //Same with curvatures.
+    PDs[invocationID] = vec4(pd1,0.0);
+    PDs[invocationID+verticesSize] = vec4(pd2,0.0);
+
+    curvatures[invocationID] = curv1;
+    curvatures[invocationID+verticesSize] = curv2;
+
+}
+
+
+
+// Weird way of calculating eigenvalues  / vectors I don't understand.
+// Jacobi?
+/*
+
+    for(int i = 0 ; i<3 ;i++){
+        //Rotate coordinates to new plane
+        vec3 newU = pd1[i]; 
+        vec3 newV = pd2[i];
+        vec3 pastNorm = cross(newU,newV);
+        vec3 newNorm = normalsOnFace[i];
+        float ndot = dot(pastNorm,newNorm);
+        if (ndot <= -1.0f) {
+            newU = -newU;
+            newV = -newV;
+        }
+        else{
+            //vec perpendicular to pastNorm in plane of pastNorm and newNorm
+            vec3 perpendicularToPast = newNorm - ndot * pastNorm;
+            // difference between perpendiculars
+            vec3 diffPerp = 1.0 / (1+ndot) * (pastNorm + newNorm);
+            newU -= diffPerp * dot(newU,perpendicularToPast);
+            newV -= diffPerp * dot(newV,perpendicularToPast);
+        }
+
+        float c=1, s=0, tt=0;
+        if(curv12[i] != 0.0){
+            // Jacobi rotation
+            float h = 0.5 * (curv2[i] - curv1[i])/curv12[i];
+            if(h < 0.0){
+                tt = 1.0 / (h - sqrt(1.0 + h*h));
+            } else{
+                tt = 1.0 / (h + sqrt(1.0 + h*h));
+            }
+            c = 1.0/sqrt(1.0 + tt*tt);
+            s = tt * c;
+        }
+        curv1[i] = curv1[i] - tt * curv12[i];
+        curv2[i] = curv2[i] + tt * curv12[i];
+
+        if(abs(curv1[i]) >= abs(curv2[i])) {
+            pd1[i] = c * newU - s * newV;
+        }
+        else {
+            //swap
+            float temp = curv1[i];
+            curv1[i] = curv2[i];
+            curv2[i] = temp;
+            
+            pd1[i] = s*newU + c*newV;
+        }
+        pd2[i] = cross(normalsOnFace[i],pd1[i]);
+    }
+*/
+
+/*
+ // I'll be calculating using a trick for 2x2 matrices
+    // The column space of the solution for one eigenvalue's eigenvector corresponds to the eigenspace of the other eigenvalue.
+    float curv1 = curv1buffer[invocationID];
+    float curv2 = curv2buffer[invocationID];
+    float curv12 = curv12buffer[invocationID];
+    
+    float m = (curv1+curv2)/2.0;
+    float detA = curv1*curv2 - curv12*curv12;
+    //Eigenvalues
+    float lambda1 = m + sqrt(abs(m*m - detA)); //max right?
+    float lambda2 = m - sqrt(abs(m*m - detA));
+    //local eigenvectors
+    vec2 ev1 = normalize(vec2(curv1-lambda2,curv12));
+    vec2 ev2 = normalize(vec2(curv1-lambda1,curv12));
+
+    vec3 pd1 = PDs[invocationID].xyz; //id
+    vec3 pd2 = PDs[invocationID+verticesSize].xyz; //id+size
+
+    //set to 3d world space
+    vec3 oldU = pd1;
+    vec3 oldV = pd2;
+    pd1 = normalize((ev1.x * oldU)+(ev1.y * oldV));
+    //project to tangent plane of vertex
+    vec3 normal = normals[invocationID].xyz;
+    pd1 = normalize(pd1-dot(pd1,normal)*normal);
+    pd2 = normalize(cross(pd1,normal)); //ensure orthogonality
+
+    curv1 = lambda1;
+    curv2 = lambda2;
+
+*/
