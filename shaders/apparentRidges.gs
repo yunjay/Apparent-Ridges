@@ -30,12 +30,13 @@ uniform vec3 viewPosition;
 uniform float threshold;
 uniform mat4 projection;
 uniform bool drawFaded;
-
+uniform bool cull;
 uniform mat4 view;
 
 const float epsilon = 1e-6;
 
 out float fade;
+
 //emit two vertices for each line...
 void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
              float emax0, float emax1, float emax2,
@@ -96,15 +97,9 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
       k01 = k12 = 1.0;
    }
 
-    // Draw the line segment
-    /*
-    glColor4f(currcolor[0], currcolor[1], currcolor[2], k01);
-    glVertex3fv(p01);
-    glColor4f(currcolor[0], currcolor[1], currcolor[2], k12);
-    glVertex3fv(p12);
-    */
-    
+    //Draw line segment
     //gl_Position = vec4(p01,1.0);
+    bool firstEmitted=false;
     gl_Position = projection * view *vec4(p01,1.0);
     fade = k01;
     EmitVertex();
@@ -116,8 +111,10 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
 
 }
 void main() {
-    for(int i =0;i<3;i++){
-        if(geometryIn[i].normalDotView<=-0.02) return;
+    if(cull){
+        for(int i =0;i<3;i++){
+            if(geometryIn[i].normalDotView<=-0.02) return;
+        }
     }
 
     //geometryIn[0],1,2; 
