@@ -1,0 +1,110 @@
+#version 460  
+//Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
+//defines the size of the local work group. Max is 1024 on my device (2060)
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+
+// so we'll be indexing vertices using global index with /3 and %3 I guess?
+layout(binding = 9, std430) readonly buffer vertexBuffer{
+    vec4 vertices[];
+};
+layout(binding = 10, std430) readonly buffer normalBuffer{
+    vec4 normals[];
+};
+layout(binding = 11, std430) readonly buffer indexBuffer{
+    uint indices[];
+};
+layout(binding = 30, std430) buffer pointAreaBuffer{
+    float pointAreas[]; //by vertex
+};
+layout(binding = 31, std430) buffer cornerAreaBuffer{
+    float cornerAreas[]; //by index
+};
+
+uniform uint indicesSize;
+uniform uint verticesSize;
+void main(){
+    //By Face 
+    uint invocationID = gl_GlobalInvocationID.x; //In 1D
+    uint faceID = 3*invocationID;
+    //indices
+    if(faceID >= indicesSize) return;
+    
+    uint v0id=indices[faceID];
+    uint v1id=indices[faceID+1];
+    uint v2id=indices[faceID+2]; 
+    
+    //vertices
+    vec3 verticesOnFace[3] = {
+        vec3(vertices[v0id]),
+        vec3(vertices[v1id]),
+        vec3(vertices[v2id])
+    };
+    //normals
+    vec3 normalsOnFace[3]={
+        vec3(normals[v0id]),
+        vec3(normals[v1id]),
+        vec3(normals[v2id])
+    };
+    //edges
+    vec3 edges[3]={
+        verticesOnFace[2]-verticesOnFace[1],
+        verticesOnFace[0]-verticesOnFace[2],
+        verticesOnFace[1]-verticesOnFace[0]
+    };
+    float faceArea = 0.5*length(cross(edges[0],edges[1]));
+    float length2[3] = {
+        length(edges[0])*length(edges[0]),
+        length(edges[1])*length(edges[1]),
+        length(edges[2])*length(edges[2])
+    };
+    //Barycentric weights of circumcenter
+    //The barycentric weight of a vertex in a triangle represents 
+    //the contribution of that vertex to a point inside the triangle. 
+    //It is calculated as the ratio of the area of the sub-triangle formed by the other two vertices to the area of the full triangle. 
+    // This ratio can be calculated using the lengths of the sides of the sub-triangle.
+    
+        //Law of cosines : a^2 + b^2 - 2ab(cos(t)) = c^2
+        // cos(t) = (a^2+b^2-c^2)/2ab
+        //Heron's formula : area of triangle = sqrt(s(s-a)(s-b)(s-c))
+        //for side lengths a,b,c and semiperimeter s (perimeter/2)
+        //since s = (a+b+c)/2, Area = 1/4 * sqrt((a+b+c)*(a+b-c)*(a-b+c)*(-a+b+c))
+    //gives us a scale to the area of the sub-triangles opposite length0 (two sub triangless on the vertex) 
+    float barycentricWeights[3] = {
+        length2[0] * (length2[1] + length2[2] - length2[0]),
+        length2[1] * (length2[2] + length2[0] - length2[1]),
+        length2[2] * (length2[0] + length2[1] - length2[2])
+    };
+    float cornerAreasTmp[3]={0.0, 0.0, 0.0};
+    // Negative barycentric weight -> Triangle's circumcenter lies outside the triangle
+    if (barycentricWeights[0] <= 0.0) {
+			cornerAreasTmp[1] = -0.25 * length2[2] * faceArea / dot(edges[0], edges[2]);
+			cornerAreasTmp[2] = -0.25 * length2[1] * faceArea / dot(edges[0], edges[1]);
+			cornerAreasTmp[0] = faceArea - cornerAreasTmp[1] - cornerAreasTmp[2];
+    } else if (barycentricWeights[1] <= 0.0) {
+        cornerAreasTmp[2] = -0.25 * length2[0] * faceArea / dot(edges[1], edges[0]);
+        cornerAreasTmp[0] = -0.25 * length2[2] * faceArea / dot(edges[1], edges[2]);
+        cornerAreasTmp[1] = faceArea - cornerAreasTmp[2] - cornerAreasTmp[0];
+    } else if (barycentricWeights[2] <= 0.0) {
+        cornerAreasTmp[0] = -0.25 * length2[1] * faceArea / dot(edges[2], edges[1]);
+        cornerAreasTmp[1] = -0.25 * length2[0] * faceArea / dot(edges[2], edges[0]);
+        cornerAreasTmp[2] = faceArea - cornerAreasTmp[0] - cornerAreasTmp[1];
+    } else {
+        float scale = 0.5 * faceArea / (barycentricWeights[0] + barycentricWeights[1] + barycentricWeights[2]);
+        for (int j = 0; j < 3; j++){
+            uint next = (j+1)%3;
+            uint prev = (j+2)%3;
+            cornerAreasTmp[j] = scale * (barycentricWeights[next] + barycentricWeights[prev]);
+
+        }
+    }
+
+
+    cornerAreas[faceID] = cornerAreasTmp[0];
+    cornerAreas[faceID+1] = cornerAreasTmp[1];
+    cornerAreas[faceID+2] = cornerAreasTmp[2];
+
+    //Add to point areas (total of corner areas)
+    pointAreas[v0id] += cornerAreasTmp[0];
+    pointAreas[v1id] += cornerAreasTmp[1];
+    pointAreas[v2id] += cornerAreasTmp[2];
+}

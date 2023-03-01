@@ -1,0 +1,303 @@
+#version 430 core 
+//Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
+//defines the size of the local work group. -> Query first ?
+layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+// as the number of work groups is called from the CPU with the dispatch function, I guess I can run
+// dispatch with group_count = ceil(vertices.size/1024)
+/*
+you can write to textures with 
+layout(rgba32f, binding = 0) uniform image2D img_output;
+and 
+imageStore(img_output, pixel_coordinates, pixel);
+but I'll be using SSBOs 
+*/
+//You can't access VBOs inside compute shdaers.
+//vec4 for SSBOs as vec3's are formatted strangely.
+//SSBO for principal directions
+//layout(binding = 7, std430) writeonly buffer PDBuffer{
+layout(binding = 7, std430)  buffer PDBuffer{
+    vec4 PDs[];
+};
+//SSBO for principal curvatures
+layout(binding = 8, std430)  buffer curvatureBufffer{
+    float curvatures[];
+};
+// so we'll be indexing vertices using global index with /3 and %3 I guess?
+layout(binding = 9, std430) readonly buffer vertexBuffer{
+    vec4 vertices[];
+};
+layout(binding = 10, std430) readonly buffer normalBuffer{
+    vec4 normals[];
+};
+layout(binding = 11, std430) readonly buffer indexBuffer{
+    uint indices[];
+};
+
+uniform uint indicesSize;
+uniform uint verticesSize;
+void main(){
+    //Just shove it all into 1D? Our vertex information is in a 1D array so...
+    uint invocationID = gl_GlobalInvocationID.x; //starts with 0
+    //if(invocationID%3!=0) return; //filter first vertices. 
+    //-> Or alternatively run size/3 invocations
+    
+    //By Face
+    //indices
+    if(3*invocationID > indicesSize) return;
+    
+    uint v0id=indices[invocationID*3];
+    uint v1id=indices[invocationID*3+1];
+    uint v2id=indices[invocationID*3+2]; 
+    /*
+    uint v0id=invocationID*3;
+    uint v1id=invocationID*3+1;
+    uint v2id=invocationID*3+2; */
+    //vertices
+    vec3 verticesOnFace[3] = {
+        vec3(vertices[v0id]),
+        vec3(vertices[v1id]),
+        vec3(vertices[v2id])
+    };
+    //normals
+    vec3 normalsOnFace[3]={
+        vec3(normals[v0id]),
+        vec3(normals[v1id]),
+        vec3(normals[v2id])
+    };
+    //edges
+    vec3 edges[3]={
+        normalize(verticesOnFace[2]-verticesOnFace[1]),
+        normalize(verticesOnFace[0]-verticesOnFace[2]),
+        normalize(verticesOnFace[1]-verticesOnFace[0]),
+    };
+    
+    //initial coordinate system by vertex
+    vec3 pd1[3]={
+        verticesOnFace[2]-verticesOnFace[0], 
+        verticesOnFace[2]-verticesOnFace[1], 
+        verticesOnFace[0]-verticesOnFace[2]
+    };
+    pd1[0]=normalize(cross(pd1[0],normalsOnFace[0]));
+    pd1[1]=normalize(cross(pd1[1],normalsOnFace[1]));
+    pd1[2]=normalize(cross(pd1[2],normalsOnFace[2]));
+    
+    vec3 pd2[3]={
+        normalize(cross(normalsOnFace[0],pd1[0])),
+        normalize(cross(normalsOnFace[1],pd1[1])),
+        normalize(cross(normalsOnFace[2],pd1[2]))
+    };
+
+    //Set normal, tangent, bitangent per face
+    vec3 faceTangent = edges[0];
+    //vec3 faceNormal = normalize(cross(edges[0],edges[1]));
+    vec3 faceNormal = normalize(cross(edges[1],edges[0]));
+    if(dot(faceNormal,normalsOnFace[0])<0.0){faceNormal = -faceNormal;}
+    vec3 faceBitangent = normalize(cross(faceNormal,faceTangent));
+
+    //estimate curvature on face over normals finite difference
+    // m : 
+    // w :
+    float m[3] = { 0, 0, 0 };
+	float w[3][3] = { {0,0,0}, {0,0,0}, {0,0,0} };
+	for (int i = 0; i < 3; i++) {
+            //using the tangent - bitangent as uv coords
+			float u = dot(edges[i],faceTangent);
+			float v = dot(edges[i],faceBitangent);
+			w[0][0] += u*u;
+			w[0][1] += u*v;
+			w[2][2] += v*v;
+
+            uint prev = (i+2) % 3;
+            uint next = (i+1) % 3;
+            // finite difference for dn
+			vec3 dn = normalsOnFace[prev] - normalsOnFace[next];
+			float dnu = dot(dn,faceTangent);
+			float dnv = dot(dn,faceBitangent);
+
+			m[0] += dnu*u;
+			m[1] += dnu*v + dnv*u;
+			m[2] += dnv*v;
+		}
+	w[1][1] = w[0][0] + w[2][2];
+	w[1][2] = w[0][1];
+
+    //Solve least squares!
+    float diagonal[3] = {0,0,0};
+    //LDLT Decomposition
+    float d0 = w[0][0];
+    diagonal[0] = 1/d0;
+
+    w[1][0]=w[0][1];
+    float l10 = diagonal[0] * w[1][0];
+    float d1 = w[1][1] - l10 * w[1][0];
+    diagonal[1] = 1/d1;
+
+    float d2 = w[2][2] - ( diagonal[0] * w[2][0] * w[2][0] ) - (diagonal[1] * w[2][1] * w[2][1]);
+    diagonal[2] = 1/d2;
+    w[2][0] = w[0][2];
+    w[2][1] = w[1][2] - l10 * w[2][0];
+
+    //Solve for LDLT decomposition
+    for (int i =0;i<3;i++){
+        float sum = m[i];
+        for(int j=0;j<i;j++){
+            sum -= w[j][i] * m[j];
+        }
+        m[i] -= sum * diagonal[i];
+    }
+    for (int i = 2; i>=0; i--){
+        float sum = 0;
+        for (int j=i+1;j<3;j++){
+            sum += w[j][i] * m[j];
+        }
+        m[i] -= sum * diagonal[i];
+    }
+    //Curvature tensor
+    float curv1[3] ={0.0, 0.0, 0.0};
+    float curv12[3] ={0.0, 0.0, 0.0};
+    float curv2[3] ={0.0, 0.0, 0.0};
+    for(int i = 0; i<3 ; i++){
+        float c1,c12,c2;
+        //Project curvature tensor (2nd form) from the old u,v basis (saved in pd1,pd2)
+        //to the new basis
+        //Rotate back to global coords
+        vec3 newU = pd1[i]; 
+        vec3 newV = pd2[i];
+        vec3 pastNorm = cross(newU,newV);
+        vec3 newNorm = cross(faceTangent,faceBitangent);
+        float ndot = dot(pastNorm,newNorm);
+        if (ndot <= -1.0f) {
+		    newU = -newU;
+		    newV = -newV;
+	    }
+        else{
+            //vec perpendicular to pastNorm in plane of pastNorm and newNorm
+            vec3 perpendicularToPast = newNorm - ndot * pastNorm;
+            // difference between perpendiculars
+            vec3 diffPerp = 1.0 / (1+ndot) * (pastNorm + newNorm);
+            newU -= diffPerp * dot(newU,perpendicularToPast);
+            newV -= diffPerp * dot(newV,perpendicularToPast);
+        }
+        
+        // projection
+        float u1 = dot(newU,faceTangent);
+        float v1 = dot(newU,faceBitangent);
+        float u2 = dot(newV,faceTangent);
+        float v2 = dot(newV,faceBitangent);
+
+        c1 = m[0] * u1 * u1 + m[1] * (2.0 * u1 * v1) + m[2] * v1*v1;
+        c12= m[0] * u1 * u2 + m[1] * (u1*v2 + u2*v1) + m[2] * v1*v2;
+        c2 = m[0] * u2 * u2 + m[1] * (2.0 * u2 * v2) + m[2] * v2*v2;
+        
+        float wt = 1.0;
+        //weight = corner area / point area 
+        // Voronoi area weighting.
+        
+        curv1[i] += wt*c1;
+        curv12[i] += wt*c12;
+        curv2[i] += wt*c2;
+    }
+    
+    //compute principal directions and curvatures with the curvature tensor (2FF) by eigens
+    //Usually on computers eigenvectors / eigenvalues are calculated with iterative QR decomposition 
+    // As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
+    // I'll be calculating using a trick for 2x2 matrices
+    // The column space of the solution for one eigenvalue's eigenvector corresponds to the eigenspace of the other eigenvalue.
+    for(int i=0; i<3 ;i++){
+            //curv1 curv12
+            //curv12 curv2
+        float m = (curv1[i]+curv2[i])/2.0;
+        float detA = curv1[i]*curv2[i] - curv12[i]*curv12[i];
+        //Eigenvalues
+        float lambda1 = m + sqrt(m*m - detA); //max right?
+        float lambda2 = m - sqrt(m*m - detA);
+        //local eigenvectors
+        vec2 ev1 = normalize(vec2(curv1[i]-lambda2,curv12[i]));
+        vec2 ev2 = normalize(vec2(curv1[i]-lambda1,curv12[i]));
+
+        //set to 3d world space
+        vec3 oldU = pd1[i];
+        vec3 oldV = pd2[i];
+        pd1[i] = normalize((ev1.x * oldU)+(ev1.y * oldV));
+        //project to tangent of vertex
+        pd1[i] = normalize(pd1[i]-dot(pd1[i],normalsOnFace[i])*normalsOnFace[i]);
+        pd2[i] = normalize(cross(pd1[i],normalsOnFace[i]));
+
+        curv1[i]=lambda1;
+        curv2[i]=lambda2;
+    }
+    //Lets write max principal directions first, then min principal directions. (+ size)
+    //Same with curvatures.
+    PDs[v0id] = vec4(pd1[0],0.0);
+    PDs[v1id] = vec4(pd1[1],0.0);
+    PDs[v2id] = vec4(pd1[2],0.0);
+
+    PDs[v0id+verticesSize] = vec4(pd2[0],0.0);
+    PDs[v1id+verticesSize] = vec4(pd2[1],0.0);
+    PDs[v2id+verticesSize] = vec4(pd2[2],0.0);
+
+    curvatures[v0id] = curv1[0];
+    curvatures[v1id] = curv1[1];
+    curvatures[v2id] = curv1[2];    
+
+    curvatures[v0id+verticesSize] = curv2[0];
+    curvatures[v1id+verticesSize] = curv2[1];
+    curvatures[v2id+verticesSize] = curv2[2];
+
+}
+
+//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS would have been easier.
+
+
+// Weird way of calculating eigenvalues  / vectors I don't understand.
+/*
+
+    for(int i = 0 ; i<3 ;i++){
+        //Rotate coordinates to new plane
+        vec3 newU = pd1[i]; 
+        vec3 newV = pd2[i];
+        vec3 pastNorm = cross(newU,newV);
+        vec3 newNorm = normalsOnFace[i];
+        float ndot = dot(pastNorm,newNorm);
+        if (ndot <= -1.0f) {
+            newU = -newU;
+            newV = -newV;
+        }
+        else{
+            //vec perpendicular to pastNorm in plane of pastNorm and newNorm
+            vec3 perpendicularToPast = newNorm - ndot * pastNorm;
+            // difference between perpendiculars
+            vec3 diffPerp = 1.0 / (1+ndot) * (pastNorm + newNorm);
+            newU -= diffPerp * dot(newU,perpendicularToPast);
+            newV -= diffPerp * dot(newV,perpendicularToPast);
+        }
+
+        float c=1, s=0, tt=0;
+        if(curv12[i] != 0.0){
+            // Jacobi rotation
+            float h = 0.5 * (curv2[i] - curv1[i])/curv12[i];
+            if(h < 0.0){
+                tt = 1.0 / (h - sqrt(1.0 + h*h));
+            } else{
+                tt = 1.0 / (h + sqrt(1.0 + h*h));
+            }
+            c = 1.0/sqrt(1.0 + tt*tt);
+            s = tt * c;
+        }
+        curv1[i] = curv1[i] - tt * curv12[i];
+        curv2[i] = curv2[i] + tt * curv12[i];
+
+        if(abs(curv1[i]) >= abs(curv2[i])) {
+            pd1[i] = c * newU - s * newV;
+        }
+        else {
+            //swap
+            float temp = curv1[i];
+            curv1[i] = curv2[i];
+            curv2[i] = temp;
+            
+            pd1[i] = s*newU + c*newV;
+        }
+        pd2[i] = cross(normalsOnFace[i],pd1[i]);
+    }
+*/

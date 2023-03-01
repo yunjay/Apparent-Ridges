@@ -22,15 +22,18 @@ void printVec(glm::vec4 v) {
 class Model {
 public:
 	//Handles
-	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, smoothedNormalsBuffer, EBO;
+	//Buffers
+	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, EBO;
 	GLuint PDBuffer, CurvatureBuffer;
 	GLuint maxPDVBO, maxCurvVBO, minPDVBO, minCurvVBO;
 	GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer; 
 	//q1 : max view-dep curvature, t1 : max view-dep curvature direction
 	//Dt1q1 : max view-dependent curvature's directional derivative in direction t1
 	GLuint adjacentFacesBuffer, q1Buffer, t1Buffer, Dt1q1Buffer;
+	GLuint pointAreaBuffer, cornerAreaBuffer;
 
-	GLuint viewDepCurvatureCompute, Dt1q1Compute; //shaders
+	//shaders
+	GLuint viewDepCurvatureCompute, Dt1q1Compute, pointAreaCompute;
 
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
@@ -43,6 +46,8 @@ public:
 	std::vector<glm::vec4> PDs;
 	std::vector<GLfloat> PrincipalCurvatures;
 	std::vector<std::array<int, 20>> adjacentFaces; //10 pairs of indices of adjacent edges to the vertex
+	std::vector<GLfloat> pointAreas; //for every vertex 
+	std::vector<GLfloat> cornerAreas; //for every index 
 
 	std::vector<glm::vec4> maxPDs;
 	std::vector<glm::vec4> minPDs;
@@ -75,7 +80,7 @@ public:
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
-		this->computeCurvatures();
+		this->computeCurvatures(); 
 		this->findAdjacentFaces();
 		this->setup();
 	}
@@ -313,91 +318,6 @@ public:
 		return minDist;
 	}
 	//Calculates principal curvatures and principal directions per vertex
-	//Using a compute shader with SSBOs
-	void setupCurvatures_OneLoop() {
-		//generate ssbo to use in compute shader
-		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
-		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
-		GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
-		
-		//So we need to initially compute by face.
-		//Load compute shader
-		GLuint curvatureCompute = loadComputeShader(".\\shaders\\curvature.compute");
-
-		
-		//resize vertices for curvature values resize(num,value)
-		PDs.resize(vertices.size()*2,glm::vec4(0));
-		PrincipalCurvatures.resize(vertices.size()*2,0.0f);
-
-		//setup SSBOs
-		// STD vector with SSBOs, is it ok or not?\
-		//  &[0] -> .data() 
-		//gen -> bind (set to GL state) -> bufferData
-		//for writing
-		glGenBuffers(1, &PDBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size()*sizeof(glm::vec4), PDs.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,7,PDBuffer);
-
-		glGenBuffers(1, &CurvatureBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size()*sizeof(GLfloat), PrincipalCurvatures.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,8,CurvatureBuffer);
-
-		//for reading
-		//Vertex positions
-		glGenBuffers(1, &vertexStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, vertexStorageBuffer);
-		std::vector<glm::vec4> vertexStorage;
-		for(auto v : vertices){ //make vec4s from vec3s
-			vertexStorage.push_back(glm::vec4(v,0.0f));
-		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, vertexStorage.size() * sizeof(glm::vec4), vertexStorage.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,9,vertexStorageBuffer);
-
-		//normals
-		glGenBuffers(1, &normalStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, normalStorageBuffer);
-		std::vector<glm::vec4> normalStorage;
-		for(auto v : normals){
-			normalStorage.push_back(glm::vec4(v,0.0f));
-		}
-		glBufferData(GL_SHADER_STORAGE_BUFFER, normalStorage.size() * sizeof(glm::vec4), normalStorage.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,10,normalStorageBuffer);
-		
-		glGenBuffers(1, &indexStorageBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size()*sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER,11,indexStorageBuffer);
-
-		//Use compute shader
-		glUseProgram(curvatureCompute);
-		
-		//hmm.. we move by indices so send indicies size.
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "indicesSize"), this->indices.size());
-		glUniform1ui(glGetUniformLocation(curvatureCompute, "verticesSize"), this->vertices.size());
-
-		//Dispatch -> run compute shader in GPU 
-		//As we have 1024 invocations per work group
-		glDispatchCompute(glm::ceil( (GLfloat(this->indices.size())/3.0f)/1024.0f ),1,1);
-
-		//Barrier to ensure coherency
-		//glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
-		
-		//kill "read only" SSBOs (vertex,normal,index SSBO)
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER,0); //unbind
-		glDeleteBuffers(1,&vertexStorageBuffer);
-		glDeleteBuffers(1,&normalStorageBuffer);
-		glDeleteBuffers(1,&indexStorageBuffer);
-		
-		std::cout<<"Curvatures for "<<this->path <<" calculated on compute shader.\n";
-		//is CUDA necessary?
-
-		this->curvaturesCalculated = true;
-
-	}
-
 	//Computed per face -> per vertex in two steps
 	void computeCurvatures() {
 		//generate ssbos to use in compute shader
@@ -474,7 +394,10 @@ public:
 		glBufferData(GL_SHADER_STORAGE_BUFFER, curv12s.size() * sizeof(GLfloat), curv12s.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 14, curv12Buffer);
 
-		//Use first compute shader
+		//Compute point areas
+		this->computePointAreas();
+
+		//Use first compute shader for curvature computation
 		glUseProgram(perFace);
 
 		//hmm.. we move by indices so send indicies size.
@@ -492,11 +415,13 @@ public:
 
 
 		glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
+		/*
 		for (int dbg = 0; dbg < 4; dbg++) {
 			std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
 			std::cout << "PDs[" << vertices.size() + dbg << "] "; printVec(PDs[vertices.size()]); std::cout << "\n";
 			std::cout << "PDs[" << PDs.size() - dbg - 1 << "] "; printVec(PDs[PDs.size() - dbg - 1]); std::cout << "\n";
 		}
+		*/
 		//Now run per vertex
 		glUseProgram(perVertex);
 
@@ -509,6 +434,8 @@ public:
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 		glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
+		/*
+		*/
 		std::cout << "PDs after per vertex compute : " << "\n";
 		for (int dbg = 0; dbg < 4; dbg++) {
 			std::cout << "PDs[" << dbg << "] "; printVec(PDs[dbg]); std::cout << "\n";
@@ -537,6 +464,7 @@ public:
 	void computeHessian() {
 
 	}
+	//Finds adjacent vertices for each vertex
 	void findAdjacentFaces() {
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
 		for (int i = 0; i < numVertices;i++) { adjacentFaces[i].fill(-1); }
@@ -547,7 +475,7 @@ public:
 					if (faces[i][j] == v) { //if vertex on face is vec (by index)
 						int v1id = faces[i][(j+1)%3];
 						int v2id = faces[i][(j+2)%3];
-						for (int k = 0; k < 19; k++) { //find empty index
+						for (int k = 0; k < 18; k++) { //find empty index
 							if (adjacentFaces[v][k] < 0) {
 								adjacentFaces[v][k] = v1id;
 								adjacentFaces[v][k+1] = v2id; 
@@ -565,7 +493,44 @@ public:
 		}
 		std::cout << " \n";
 	}
+	//Calculates "Voronoi" area for each vertex
+	void computePointAreas() {
+		pointAreaCompute = loadComputeShader(".\\shaders\\pointAreas.compute");
+		glUseProgram(pointAreaCompute);
 
+		pointAreas.resize(this->numVertices,0.0f); //by vertex
+		glGenBuffers(1, &pointAreaBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, pointAreaBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, pointAreas.size() * sizeof(GLfloat), pointAreas.data(), GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 30, pointAreaBuffer);
+
+		cornerAreas.resize(this->numIndices, 0.0f); //by index (for faces)
+		glGenBuffers(1, &cornerAreaBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cornerAreaBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, cornerAreas.size() * sizeof(GLfloat), cornerAreas.data(), GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 31, cornerAreaBuffer);
+
+		glUniform1ui(glGetUniformLocation(pointAreaCompute, "indicesSize"), this->numIndices);
+		glUniform1ui(glGetUniformLocation(pointAreaCompute, "verticesSize"), this->numVertices);
+
+		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / 1024.0f), 1, 1);
+		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+
+		/*
+		glGetNamedBufferSubData(cornerAreaBuffer, 0, cornerAreas.size() * sizeof(GLfloat), cornerAreas.data());
+		glGetNamedBufferSubData(pointAreaBuffer, 0, pointAreas.size() * sizeof(GLfloat), pointAreas.data());
+		std::cout << "Corner Areas after compute : " << "\n";
+		for (int dbg = 0; dbg < 2; dbg++) {
+			std::cout << "cornerAreas[" << dbg<< "] " << cornerAreas[dbg] << " ,";
+			std::cout << "cornerAreas[" << cornerAreas.size() - dbg - 1 << "] "<< cornerAreas[cornerAreas.size() - dbg - 1]<<" "; std::cout << "\n";
+		}std::cout << "Point Areas after compute : " << "\n";
+		for (int dbg = 0; dbg < 2; dbg++) {
+			std::cout << "pointAreas[" << dbg << "] " << pointAreas[dbg] << " ,";
+			std::cout << "pointAreas[" << pointAreas.size() - dbg - 1 << "] " << pointAreas[pointAreas.size() - dbg - 1] << " "; std::cout << "\n";
+		}
+		*/
+	
+	}
 	bool loadAssimp() {
 		Assimp::Importer importer;
 		
@@ -580,6 +545,7 @@ public:
 			fprintf(stderr, importer.GetErrorString());
 			return false;
 		}
+		std::cout << "Number of meshes : " << scene->mNumMeshes << ".\n";
 
 		// TODO : In this code we just use the 1st mesh (for now)
 		const aiMesh* mesh = scene->mMeshes[0];
@@ -638,10 +604,13 @@ public:
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
 	}
+	bool exportAssimp() {
+
+	}
 	bool rebindSSBOs() {
 
 		//Rebind SSBOs
-		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, this->PDBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 7, PDBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 8, CurvatureBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 9, vertexStorageBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 10, normalStorageBuffer);
@@ -650,8 +619,35 @@ public:
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 21, q1Buffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 22, t1Buffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, Dt1q1Buffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 30, pointAreaBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 31, cornerAreaBuffer);
 		return true;
 	}
+
+	//destructor
+	//I should also be using smart pointers for the meshes / models
+	//Smart pointers should NOT be in another smart pointer.
+	//Nested ownership often causes leaks
+	/*
+	~Model() {
+		
+		glDeleteBuffers(1, &positionBuffer);
+		glDeleteBuffers(1, &normalBuffer);
+		glDeleteBuffers(1, &textureBuffer);
+		glDeleteBuffers(1, &EBO);
+		glDeleteBuffers(1, &PDBuffer);
+		glDeleteBuffers(1, &CurvatureBuffer);
+		glDeleteBuffers(1, &vertexStorageBuffer);
+		glDeleteBuffers(1, &normalStorageBuffer);
+		glDeleteBuffers(1, &indexStorageBuffer);
+		glDeleteBuffers(1, &adjacentFacesBuffer);
+		glDeleteBuffers(1, &q1Buffer);
+		glDeleteBuffers(1, &t1Buffer);
+		glDeleteBuffers(1, &Dt1q1Buffer);
+		glDeleteBuffers(1, &pointAreaBuffer);
+		glDeleteBuffers(1, &cornerAreaBuffer);
+	}
+	*/
 };
 //end of Model class
 

@@ -71,3 +71,5 @@ x64/Debug/imgui_widgets.obj
 x64/Debug/imgui.obj
 x64/Debug/ApparentRidges.obj
 x64/Release/ApparentRidges.obj
+x64/Release/models/Zagato.obj
+models/Zagato.obj

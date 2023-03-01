@@ -34,10 +34,10 @@ uniform vec3 viewPosition;
 uniform uint verticesSize;
 void main(){
     uint id = gl_GlobalInvocationID.x; //starts with 0
-    if(id>=verticesSize) return; 
+    if(id>=verticesSize) return;  //by vertex
 
     vec3 position = vertices[id].xyz;
-    vec3 normal = normals[id].xyz;
+    vec3 normal = normalize(normals[id].xyz);
     vec3 viewDir = normalize(viewPosition - position);
     vec3 maxPD = PDs[id].xyz;
     vec3 minPD = PDs[id+verticesSize].xyz;
@@ -51,12 +51,11 @@ void main(){
     float u2 = u*u;
     float v2 = v*v;
     float uv = u*v;
-    // Kr * sin^2
-    float kr = maxCurv * u2 + minCurv * v2;
     float csc2 = 1.0/(u2+v2);
 
     //Q is the view dependent curvature tensor
-    //Why it is computed this way is beyond me..
+    //Q = SPbar^(-1)
+    //maxCurv and minCurv are eigenvalues of S
     float sec_min1 = 1.0/abs(normalDotView) - 1.0;
     float Q11 = maxCurv * (1.0 + sec_min1 * u2*csc2);
     float Q12 = maxCurv * (      sec_min1 * uv*csc2);

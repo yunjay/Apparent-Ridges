@@ -28,18 +28,18 @@ float xDegrees = 0.0f;
 float yDegrees = 0.0f;
 float modelSize = 1.0f;
 float lightDegrees = 0.0f;
-float PDLengthScale = 1.0f;
+float PDLengthScale = 0.5f;
 glm::vec3 background(30.0 / 255, 30.0 / 255, 30.0 / 255);
 glm::vec3 lineColor(1.0f);
 
 bool ridgesOn = true;
 bool PDsOn = false;
-bool drawFaded = false;
+bool drawFaded = true;
 bool apparentCullFaces = false;
 bool transparent = false;
 int main()
 {
-    int lineWidth = 1;
+    float lineWidth = 2.5;
     float thresholdScale = 1.0f;
 
 
@@ -81,9 +81,14 @@ int main()
     //z buffer
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glEnable(GL_LINE_SMOOTH);
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
+    /*
+    glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_LINE_SMOOTH);
+    glEnable(GL_POINT_SMOOTH);
+    glEnable(GL_POLYGON_SMOOTH);
+    */
     //IMGui init    
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -96,11 +101,21 @@ int main()
     std::vector<Model> models;
     //order causes no bugs
     //models.push_back(Model(".\\models\\Zagato.obj"));
+    //models.push_back(Model(".\\models\\triumph.obj"));
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
+    //models.push_back(Model(".\\models\\bunny2.ply"));
+
+    models.push_back(Model(".\\models\\max-planck.obj"));
+    //models.push_back(Model(".\\models\\Victory.obj"));
+    //models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
-    models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
-    models.push_back(Model(".\\models\\chips.obj"));
+    models.push_back(Model(".\\models\\brain.obj"));
+    //models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
+    //models.push_back(Model(".\\models\\cow.obj"));
+    //models.push_back(Model(".\\models\\Nefertiti.obj"));
+    /*
+    */
     /*
     */
     
@@ -158,8 +173,8 @@ int main()
         ImGui::Checkbox("Principal Directions", &PDsOn);
         ImGui::Checkbox("Draw Faded Lines", &drawFaded);
         ImGui::Checkbox("Cull Apparent Ridges", &apparentCullFaces);
-        ImGui::Checkbox("Transparent", &apparentCullFaces);
-        const char* listboxItems[] = { "Bunny", "Lucy", "David", "Dragon", "Chips"};
+        ImGui::Checkbox("Transparent", &transparent);
+        const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain",/*"Dragon",*/ "Nefertiti"};
         static int currentlistboxItem = 0;
         ImGui::ListBox("Model", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
@@ -167,8 +182,8 @@ int main()
         ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
-        ImGui::SliderInt("Line Width", &lineWidth, 1, 10);
-        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 10.0f);
+        ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
+        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 2.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
@@ -208,6 +223,9 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
         glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
         if (ridgesOn) {
+            glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glEnable(GL_LINE_SMOOTH);
+            glEnable(GL_POLYGON_SMOOTH);
             if (!transparent) {
             //render base model
             glUseProgram(base);
@@ -228,16 +246,21 @@ int main()
             
             glUseProgram(apparentRidges);
             //threshold is scaled to the reciprocal of feature size
-            if(currentModel->minDistance>1.0f)
-                glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),thresholdScale/(currentModel->minDistance* currentModel->minDistance));
-            else
-                glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), thresholdScale * currentModel->minDistance);
+            
+            //if (currentModel->minDistance>1.0f)
+                glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),0.02f*thresholdScale/(currentModel->minDistance* currentModel->minDistance));
+            //else
+              //  glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), 3.0f * thresholdScale * currentModel->minDistance);
 
             glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
             glUniform3f(glGetUniformLocation(apparentRidges, "backgroundColor"), background.x, background.y, background.z);
             glUniform1i(glGetUniformLocation(apparentRidges, "drawFaded"), drawFaded);
             glUniform1i(glGetUniformLocation(apparentRidges, "cull"), apparentCullFaces);
         }
+
+        glDisable(GL_BLEND);
+        glDisable(GL_LINE_SMOOTH);
+        glDisable(GL_POLYGON_SMOOTH);
         if (PDsOn) {
             //Render Principal Directions
             glUseProgram(maxPDShader);

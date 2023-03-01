@@ -47,7 +47,7 @@ void main(){
     vec3 maxPD = PDs[id].xyz;
     vec3 minPD = PDs[id+verticesSize].xyz;
     float viewDepCurv = q1s[id];
-    vec2 t1=t1s[id];
+    vec2 t1 = t1s[id];
 
     vec3 world_t1 = t1[0] * maxPD + t1[1] * minPD;
     vec3 world_t2 = cross(normal,world_t1);

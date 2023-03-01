@@ -113,7 +113,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
 void main() {
     if(cull){
         for(int i =0;i<3;i++){
-            if(geometryIn[i].normalDotView<=-0.02) return;
+            if(geometryIn[i].normalDotView<=-0.05) return;
         }
     }
 
@@ -144,9 +144,9 @@ void main() {
     vec3 tmax2 = geometryIn[2].Dt1q1 * world_t1_2;
 
     //"zero crossing" if the tmaxes along an edge point in opposite directions
-    bool zeroCross01 = ((dot(tmax0,tmax1)) <= 0.0);
-    bool zeroCross12 = ((dot(tmax1,tmax2)) <= 0.0);
-    bool zeroCross20 = ((dot(tmax2,tmax0)) <= 0.0);
+    bool zeroCross01 = (dot(tmax0,tmax1) <= 0.0);
+    bool zeroCross12 = (dot(tmax1,tmax2) <= 0.0);
+    bool zeroCross20 = (dot(tmax2,tmax0) <= 0.0);
     if (int(zeroCross01) + int(zeroCross12) + int(zeroCross20) < 2)
         return;
     //Draw lines

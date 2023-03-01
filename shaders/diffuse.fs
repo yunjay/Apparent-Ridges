@@ -23,11 +23,11 @@ void main() {
      // specular
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0f);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
     vec3 specular;
     if(dot(lightDir,norm)>=0){
         specular = vec3(1.0,1.0,1.0)* spec ;
 	} else specular =vec3(0,0,0); 
 
-    color = vec4( (diff + ambient+specular) * vec3(1.0), 1.0f);
+    color = vec4( (diff + ambient+specular) * vec3(1.0), 1.0);
 }
