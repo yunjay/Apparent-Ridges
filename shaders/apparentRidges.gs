@@ -28,9 +28,10 @@ in VertexData{
 //geometryIn[] for the output we made
 uniform vec3 viewPosition;
 uniform float threshold;
-uniform mat4 projection;
 uniform bool drawFaded;
 uniform bool cull;
+uniform mat4 model;
+uniform mat4 projection;
 uniform mat4 view;
 
 const float epsilon = 1e-6;

@@ -1,7 +1,6 @@
 #version 460
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
-
-
+//layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout(binding = 7, std430) readonly buffer PDBuffer {
     vec4 PDs[];
 };
@@ -34,18 +33,27 @@ uniform uint verticesSize;
 //by iterating all adjacent faces of the vertex looking for direction t1 and computing
 //the curvature from there.
 uniform vec3 viewPosition;
+uniform mat4 model;
 void main(){
     uint id = gl_GlobalInvocationID.x;
     if(id>verticesSize)return;
     
     vec3 v0 = vertices[id].xyz;
-    vec3 normal = normals[id].xyz;
+    //!!!
+    v0 = vec3(model*vec4(v0,1.0));
 
+    vec3 normal = normals[id].xyz;
+    normal = normalize(mat3(transpose(inverse(model))) * normal);
+
+    //vec3 viewDir = normalize(viewPosition - v0);
     vec3 viewDir = normalize(viewPosition - v0);
+    //float normalDotView = dot(viewDir,normal);
     float normalDotView = dot(viewDir,normal);
 
-    vec3 maxPD = PDs[id].xyz;
-    vec3 minPD = PDs[id+verticesSize].xyz;
+     //vec3 maxPD = PDs[id].xyz;
+    vec3 maxPD = normalize(vec3(model*vec4(PDs[id].xyz,1.0)));
+    //vec3 minPD = PDs[id+verticesSize].xyz;
+    vec3 minPD = normalize(vec3(model*vec4(PDs[id+verticesSize].xyz,1.0)));
     float viewDepCurv = q1s[id];
     vec2 t1 = t1s[id];
 
@@ -60,19 +68,17 @@ void main(){
         int v2id = adjFaces[id][2*i+1]; //1 3 5 index
         if(v1id<0 || v2id<0) break; //empty indices set to -1
         //adjacent vertices
-        vec3 v1 = vertices[v1id].xyz;
-        vec3 v2 = vertices[v2id].xyz;
+        vec3 v1 = vec3(model*vec4(vertices[v1id].xyz,1.0));
+        vec3 v2 = vec3(model*vec4(vertices[v2id].xyz,1.0));
         
         //find point p between v1 and v2 by linear interpolation
-        //v0 is along t1, perpendicular to t2
+        //v0 is along t1, perp to t2
         // p = w1*v1 + w2*v2, where w2 = 1-w1
         float v1_dot_t2 = dot(v1,world_t2);
         float v2_dot_t2 = dot(v2,world_t2);
         float w1 = (v2_dot_t2 - v0_dot_t2) / (v2_dot_t2 - v1_dot_t2);
 
         //if w1 is not in range [0,1) skip
-        //GLSL uses short circuit (eager/lazy) evaluation so the first argument should be
-        //the cheaper/more likely one so the second evaluation is run less. 
         if(w1<0.0 || w1>=1.0) continue;
 
         //construct opposite point
@@ -90,7 +96,10 @@ void main(){
     }
 
     Dt1q1/=float(n);
-
     Dt1q1s[id] = Dt1q1;
 
 }
+
+
+//GLSL uses short circuit (eager/lazy) evaluation so the first argument should be
+//the cheaper/more likely one so the second evaluation is run less. 

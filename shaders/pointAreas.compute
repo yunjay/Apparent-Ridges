@@ -2,6 +2,7 @@
 //Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
 //defines the size of the local work group. Max is 1024 on my device (2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+//layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
 // so we'll be indexing vertices using global index with /3 and %3 I guess?
 layout(binding = 9, std430) readonly buffer vertexBuffer{

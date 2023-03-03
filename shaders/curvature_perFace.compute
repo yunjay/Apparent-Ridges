@@ -2,6 +2,7 @@
 //Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
 //defines the size of the local work group. Max is 1024 on my device (2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+//layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout(binding = 7, std430)  buffer PDBuffer{
     vec4 PDs[];
 };
@@ -38,6 +39,7 @@ layout(binding = 31, std430) buffer cornerAreaBuffer{
 //Calculate by face then by vertex
 uniform uint indicesSize;
 uniform uint verticesSize;
+
 void main(){
     //Just shove it all into 1D? Our vertex information is in a 1D array so...
     uint invocationID = gl_GlobalInvocationID.x; //starts with 0
@@ -61,17 +63,12 @@ void main(){
     };
     //normals
     vec3 normalsOnFace[3]={
-        vec3(normals[v0id]),
-        vec3(normals[v1id]),
-        vec3(normals[v2id])
+        normalize(vec3(normals[v0id])),
+        normalize(vec3(normals[v1id])),
+        normalize(vec3(normals[v2id]))
     };
     //edges
     vec3 edges[3]={
-        /*
-        normalize(verticesOnFace[2]-verticesOnFace[1]),
-        normalize(verticesOnFace[0]-verticesOnFace[2]),
-        normalize(verticesOnFace[1]-verticesOnFace[0]),
-        */
         verticesOnFace[2]-verticesOnFace[1],
         verticesOnFace[0]-verticesOnFace[2],
         verticesOnFace[1]-verticesOnFace[0],
@@ -108,7 +105,6 @@ void main(){
     //Set normal, tangent, bitangent per face
     vec3 faceTangent = normalize(edges[0]);
     vec3 faceNormal = normalize(cross(edges[0],edges[1]));
-    //vec3 faceNormal = normalize(cross(edges[1],edges[0]));
     if(dot(faceNormal,normalsOnFace[0])<0.0){faceNormal = -faceNormal;}
     vec3 faceBitangent = normalize(cross(faceNormal,faceTangent));
 
@@ -117,7 +113,7 @@ void main(){
     // w :
     float m[3] = { 0, 0, 0 };
 	float w[3][3] = { {0,0,0}, {0,0,0}, {0,0,0} };
-	for (int i = 0; i < 3; i++) {
+	for (uint i = 0; i < 3; i++) {
             //using the tangent - bitangent as uv coords
 			float u = dot(edges[i],faceTangent);
 			float v = dot(edges[i],faceBitangent);
@@ -170,6 +166,7 @@ void main(){
         }
         m[i] -= sum * diagonal[i];
     }
+
     //Curvature tensor for each vertex of the face
     float curv1[3] ={0.0, 0.0, 0.0};
     float curv12[3] ={0.0, 0.0, 0.0};
@@ -177,14 +174,14 @@ void main(){
     for(int i = 0; i<3 ; i++){
         float c1,c12,c2;
         //Project curvature tensor (2nd form) from the old u,v basis (saved in pd1,pd2)
-        //to the new basis
+        //to the new basis (newU newV)
         //Rotate back to global coords
         vec3 newU = pd1[i]; 
         vec3 newV = pd2[i];
         vec3 pastNorm = cross(newU,newV);
         vec3 newNorm = cross(faceTangent,faceBitangent);
         float ndot = dot(pastNorm,newNorm);
-        if (ndot <= -1.0f) {
+        if (ndot <= -1.0) {
 		    newU = -newU;
 		    newV = -newV;
 	    }
@@ -192,7 +189,7 @@ void main(){
             //vec perpendicular to pastNorm in plane of pastNorm and newNorm
             vec3 perpendicularToPast = newNorm - ndot * pastNorm;
             // difference between perpendiculars
-            vec3 diffPerp = 1.0 / (1+ndot) * (pastNorm + newNorm);
+            vec3 diffPerp = 1.0 / (1.0+ndot) * (pastNorm + newNorm);
             newU -= diffPerp * dot(newU,perpendicularToPast);
             newV -= diffPerp * dot(newV,perpendicularToPast);
         }
@@ -208,8 +205,7 @@ void main(){
         c2 = m[0] * u2 * u2 + m[1] * (2.0 * u2 * v2) + m[2] * v2*v2;
         
         //weight = corner area / point area 
-        // Voronoi area weighting. TODO
-        //float wt = 0.2;
+        // Voronoi area weighting. 
         float wt = cornerAreasOnFace[i] / pointAreasOnFace[i];
 
         curv1[i] += wt*c1;

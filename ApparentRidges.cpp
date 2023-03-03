@@ -100,25 +100,22 @@ int main()
     //Load Models
     std::vector<Model> models;
     //order causes no bugs
+    //models.push_back(Model(".\\models\\cow.obj"));
     //models.push_back(Model(".\\models\\Zagato.obj"));
-    //models.push_back(Model(".\\models\\triumph.obj"));
-    models.push_back(Model(".\\models\\stanford-bunny.obj"));
-    //models.push_back(Model(".\\models\\bunny2.ply"));
-
+    models.push_back(Model(".\\models\\Nefertiti.obj"));
+    //models.push_back(Model(".\\models\\stanford-bunny.obj"));
+    /*
     models.push_back(Model(".\\models\\max-planck.obj"));
+
     //models.push_back(Model(".\\models\\Victory.obj"));
     //models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
     models.push_back(Model(".\\models\\brain.obj"));
+    models.push_back(Model(".\\models\\column.obj"));
     //models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
-    //models.push_back(Model(".\\models\\cow.obj"));
-    //models.push_back(Model(".\\models\\Nefertiti.obj"));
-    /*
     */
-    /*
-    */
-    
+    //"Bunny", "Planck","Lucy", "David", "Brain",/*"Dragon",*/ "Nefertiti"};
 
     Model* currentModel = &models[0];
 
@@ -183,7 +180,7 @@ int main()
         ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
-        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 2.0f);
+        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 5.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 1.0f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
@@ -217,6 +214,7 @@ int main()
         glm::mat4 view = glm::lookAt(cameraPos, viewDir, glm::vec3(0.0f, 1.0f, 0.0f));
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
+        currentModel->modelMatrix = model;
 
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "model"), 1, GL_FALSE, &model[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "view"), 1, GL_FALSE, &view[0][0]);
@@ -240,9 +238,11 @@ int main()
             currentModel->apparentRidges = true;
             glUseProgram(currentModel->viewDepCurvatureCompute);
             glUniform3f(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            //glUniformMatrix4fv(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "model"), 1, GL_FALSE, &model[0][0]);
             
             glUseProgram(currentModel->Dt1q1Compute);
             glUniform3f(glGetUniformLocation(currentModel->Dt1q1Compute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            //glUniformMatrix4fv(glGetUniformLocation(currentModel->Dt1q1Compute, "model"), 1, GL_FALSE, &model[0][0]);
             
             glUseProgram(apparentRidges);
             //threshold is scaled to the reciprocal of feature size
@@ -256,6 +256,8 @@ int main()
             glUniform3f(glGetUniformLocation(apparentRidges, "backgroundColor"), background.x, background.y, background.z);
             glUniform1i(glGetUniformLocation(apparentRidges, "drawFaded"), drawFaded);
             glUniform1i(glGetUniformLocation(apparentRidges, "cull"), apparentCullFaces);
+
+            currentModel->apparentRidges = false;
         }
 
         glDisable(GL_BLEND);

@@ -50,6 +50,7 @@ uniform vec3 viewPosition;
 uniform float threshold;
 void main() {
     gl_Position = projection * view *  model * vec4(inPosition, 1.0);
+
     vec3 position = vec3(model * vec4(inPosition, 1.0)); 
     //position = vec3(projection * view *  model * vec4(inPosition, 1.0));
     vec3 normal = mat3(transpose(inverse(model))) * inNormal;
@@ -59,15 +60,14 @@ void main() {
     
     float ndotv = dot(viewDir,normal);
     
-
     vertexOut.pos = position;
     vertexOut.normal = normal;
     vertexOut.texCoords = inTexCoords;  
     vertexOut.normalDotView = ndotv;
     vertexOut.viewDirection = viewDir;
 
-    vertexOut.maxPrincpal = maxPD.xyz;
-    vertexOut.minPrincipal = minPD.xyz;
+    vertexOut.maxPrincpal = normalize(vec3(model *maxPD));
+    vertexOut.minPrincipal = normalize(vec3(model *minPD));
     vertexOut.maxCurvature = maxCurv;
     vertexOut.minCurvature = minCurv;
 

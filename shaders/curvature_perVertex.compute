@@ -2,6 +2,7 @@
 //Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
 //defines the size of the local work group. Max is 1024 on my device (2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+//layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout(binding = 7, std430)  buffer PDBuffer{
     vec4 PDs[];
 };
@@ -39,7 +40,7 @@ void rotCoordSys(vec3 old_u,  vec3 old_v,
 	new_v = old_v;
 	vec3 old_norm = cross(old_u,old_v);
 	float ndot = dot(old_norm, new_norm);
-	if (ndot <= -1.0f) {
+	if (ndot <= -1.0) {
 		new_u = -new_u;
 		new_v = -new_v;
 		return;
@@ -49,12 +50,13 @@ void rotCoordSys(vec3 old_u,  vec3 old_v,
 	// Perpendicular to new_norm and in the plane of old_norm and new_norm
 	// vec perp_new = ndot * new_norm - old_norm;
 	// perp_old - perp_new, with normalization constants folded in
-	vec3 dperp = 1.0f / (1 + ndot) * (old_norm + new_norm);
+	vec3 dperp = 1.0 / (1 + ndot) * (old_norm + new_norm);
 	// Subtracts component along perp_old, and adds the same amount along
 	// perp_new.  Leaves unchanged the component perpendicular to the
 	// plane containing old_norm and new_norm.
 	new_u -= dperp * (dot(new_u, perp_old));
 	new_v -= dperp * (dot(new_v, perp_old));
+    return;
 }
 //Runs per vertex
 void main(){
@@ -71,9 +73,10 @@ void main(){
     vec3 pd1 = PDs[invocationID].xyz; //id
     vec3 pd2 = PDs[invocationID+verticesSize].xyz; //id+size
 
-    vec3 oldU ;
-    vec3 oldV ;
+    vec3 oldU;
+    vec3 oldV;
     rotCoordSys(pd1,pd2,normal,oldU,oldV);
+
     //compute principal directions and curvatures with the curvature tensor (2FF) by eigens
     //Usually on computers eigenvectors / eigen  values are calculated with iterative QR decomposition 
     // As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
@@ -94,16 +97,16 @@ void main(){
 	if (abs(curv1) >= abs(curv2)) {
 		pd1 = c*oldU - s*oldV;
 	} else {
-        float tmp=curv1;
-        curv1=curv2;curv2=tmp;
+        float tmp = curv1; //swap
+        curv1 = curv2; curv2 = tmp;
 		pd1 = s*oldU + c*oldV;
 	}
 	pd2 = cross(normal,pd1);
    
     // write max principal directions first, then min principal directions. (+ size)
     //Same with curvatures.
-    PDs[invocationID] = vec4(pd1,0.0);
-    PDs[invocationID+verticesSize] = vec4(pd2,0.0);
+    PDs[invocationID] = vec4(normalize(pd1),0.0);
+    PDs[invocationID+verticesSize] = vec4(normalize(pd2),0.0);
 
     curvatures[invocationID] = curv1;
     curvatures[invocationID+verticesSize] = curv2;
