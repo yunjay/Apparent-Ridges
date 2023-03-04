@@ -524,7 +524,7 @@ public:
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
 		for (int i = 0; i < numVertices;i++) { adjacentFaces[i].fill(-1); }
 		/*
-		//This causes a HUGE bottleneck!! CPU = slow af
+		//This causes a HUGE bottleneck!! This is really bad code, why loop over vertices?? Just loop over faces once.
 		//Lets make a shader for this too.
 		for (int v = 0; v < numVertices;v++) { //for all vertices
 			//glm::vec3 vec = vertices[v];
@@ -551,15 +551,17 @@ public:
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
 
 		GLuint adjacentFacesCompute = loadComputeShader(".\\shaders\\adjacentFaces.compute");
+		glUseProgram(adjacentFacesCompute);
 		glUniform1ui(glGetUniformLocation(adjacentFacesCompute, "indicesSize"), this->numIndices);
-		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / float(workGroupSize)), 1, 1);
+		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / float(workGroupSize)), 1, 1); //per face
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 		
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end - start;
-		std::cout << "Adjacent faces calculated. Took : "<< elapsed_seconds.count() <<"seconds. \n";
-		
+		std::cout << "Adjacent faces calculated. Took : "<< elapsed_seconds.count() <<" seconds. \n";
+
+		glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(GLfloat), adjacentFaces.data());
 		std::cout << "First vertex's adjacent vertices : ";
 		for (int j = 0; j < 10; j++) {
 			std::cout << this->adjacentFaces[0][2 * j] << ", " << this->adjacentFaces[0][2 * j + 1] << ".";
