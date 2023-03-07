@@ -66,8 +66,8 @@ void main() {
     vertexOut.normalDotView = ndotv;
     vertexOut.viewDirection = viewDir;
 
-    vertexOut.maxPrincpal = normalize(vec3(model *maxPD));
-    vertexOut.minPrincipal = normalize(vec3(model *minPD));
+    vertexOut.maxPrincpal = normalize(vec3(model * maxPD));
+    vertexOut.minPrincipal = normalize(vec3(model * minPD));
     vertexOut.maxCurvature = maxCurv;
     vertexOut.minCurvature = minCurv;
 

@@ -102,16 +102,15 @@ int main()
     //order causes no bugs
     //models.push_back(Model(".\\models\\cow.obj"));
     //models.push_back(Model(".\\models\\Zagato.obj"));
-    models.push_back(Model(".\\models\\Nefertiti.obj"));
-    //models.push_back(Model(".\\models\\stanford-bunny.obj"));
-    /*
+    models.push_back(Model(".\\models\\stanford-bunny.obj"));
     models.push_back(Model(".\\models\\max-planck.obj"));
 
     //models.push_back(Model(".\\models\\Victory.obj"));
     //models.push_back(Model(".\\models\\lucy.obj"));
-    models.push_back(Model(".\\models\\lucy.obj"));
-    models.push_back(Model(".\\models\\rapid.obj"));
-    models.push_back(Model(".\\models\\brain.obj"));
+    //models.push_back(Model(".\\models\\rapid.obj"));
+    //models.push_back(Model(".\\models\\brain.obj"));
+    //models.push_back(Model(".\\models\\Nefertiti.obj"));
+    /*
     models.push_back(Model(".\\models\\column.obj"));
     //models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
     */
@@ -222,8 +221,11 @@ int main()
         glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
         if (ridgesOn) {
             glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            //No guarantee this does anything.
             glEnable(GL_LINE_SMOOTH);
             glEnable(GL_POLYGON_SMOOTH);
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+            glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
             if (!transparent) {
             //render base model
             glUseProgram(base);
@@ -248,7 +250,8 @@ int main()
             //threshold is scaled to the reciprocal of feature size
             
             //if (currentModel->minDistance>1.0f)
-                glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),0.02f*thresholdScale/(currentModel->minDistance* currentModel->minDistance));
+                //glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),0.2f*thresholdScale/(currentModel->minDistance));
+                glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), 0.02f * thresholdScale / (currentModel->minDistance * currentModel->minDistance));
             //else
               //  glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), 3.0f * thresholdScale * currentModel->minDistance);
 

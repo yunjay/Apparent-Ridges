@@ -31,6 +31,7 @@ public:
 	GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer; 
 	//q1 : max view-dep curvature, t1 : max view-dep curvature direction
 	//Dt1q1 : max view-dependent curvature's directional derivative in direction t1
+	//TODO : These should be static
 	GLuint adjacentFacesBuffer, q1Buffer, t1Buffer, Dt1q1Buffer;
 	GLuint pointAreaBuffer, cornerAreaBuffer;
 
@@ -524,29 +525,10 @@ public:
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
 		for (int i = 0; i < numVertices;i++) { adjacentFaces[i].fill(-1); }
 		/*
-		//This causes a HUGE bottleneck!! This is really bad code, why loop over vertices?? Just loop over faces once.
-		//Lets make a shader for this too.
-		for (int v = 0; v < numVertices;v++) { //for all vertices
-			//glm::vec3 vec = vertices[v];
-			for (int i = 0; i < numFaces; i++) { //for all faces
-				for (int j = 0; j < 3; j++) { //for vertices of face (indicies)
-					if (faces[i][j] == v) { //if vertex on face is vec (by index)
-						int v1id = faces[i][(j+1)%3];
-						int v2id = faces[i][(j+2)%3];
-						for (int k = 0; k < 18; k++) { //find empty index
-							if (adjacentFaces[v][k] < 0) {
-								adjacentFaces[v][k] = v1id;
-								adjacentFaces[v][k+1] = v2id; 
-								break;
-							}
-						}
-					}
-				}
-			}
-		}
+		//Computing this on the cpu is rather slow so I made a shader for it.
 		*/
 		glGenBuffers(1, &adjacentFacesBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, adjacentFacesBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, adjacentFacesBuffer);  
 		glBufferData(GL_SHADER_STORAGE_BUFFER, adjacentFaces.size() * sizeof(int) * 20, adjacentFaces.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
 
@@ -564,11 +546,11 @@ public:
 		glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(GLfloat), adjacentFaces.data());
 		std::cout << "First vertex's adjacent vertices : ";
 		for (int j = 0; j < 10; j++) {
-			std::cout << this->adjacentFaces[0][2 * j] << ", " << this->adjacentFaces[0][2 * j + 1] << ".";
+			std::cout << this->adjacentFaces[0][2 * j] << ", " << this->adjacentFaces[0][2 * j + 1] << ". ";
 		}
 		std::cout << "\n";
 	}
-	//Calculates "Voronoi" area for each vertex
+	//Calculates pseudo-"Voronoi" area for each vertex
 	void computePointAreas() {
 		pointAreaCompute = loadComputeShader(".\\shaders\\pointAreas.compute");
 		glUseProgram(pointAreaCompute);

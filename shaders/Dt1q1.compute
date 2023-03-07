@@ -28,6 +28,8 @@ layout(binding = 22, std430) buffer t1Buffer{
 layout(binding = 23, std430) buffer Dt1q1Buffer{
     float Dt1q1s[];
 };
+const float epsilon = 1e-6;
+const float MAX_FLOAT = 3.402823466e+38;
 uniform uint verticesSize;
 //We need to calculate the derivative view-dep max curvature in max direction for each veretx,
 //by iterating all adjacent faces of the vertex looking for direction t1 and computing
@@ -55,13 +57,13 @@ void main(){
     //vec3 minPD = PDs[id+verticesSize].xyz;
     vec3 minPD = normalize(vec3(model*vec4(PDs[id+verticesSize].xyz,1.0)));
     float viewDepCurv = q1s[id];
-    vec2 t1 = t1s[id];
+    vec2 t1 = t1s[id]; //max curv direction
 
     vec3 world_t1 = t1[0] * maxPD + t1[1] * minPD;
     vec3 world_t2 = cross(normal,world_t1);
     float v0_dot_t2 = dot(v0,world_t2);
-    uint n = 0;
-    float Dt1q1 = 0;
+    int n = 0;
+    float Dt1q1 = 0.0;
     //for 10 pairs of adjacent vertices
     for(int i =0;i<10;i++){
         int v1id = adjFaces[id][2*i]; //0 2 4 index
@@ -76,8 +78,10 @@ void main(){
         // p = w1*v1 + w2*v2, where w2 = 1-w1
         float v1_dot_t2 = dot(v1,world_t2);
         float v2_dot_t2 = dot(v2,world_t2);
-        float w1 = (v2_dot_t2 - v0_dot_t2) / (v2_dot_t2 - v1_dot_t2);
-
+        float w1;
+        //if(!((v2_dot_t2 - v1_dot_t2)<=epsilon))
+           w1 = (v2_dot_t2 - v0_dot_t2) / (v2_dot_t2 - v1_dot_t2);
+        //else w1 = MAX_FLOAT;
         //if w1 is not in range [0,1) skip
         if(w1<0.0 || w1>=1.0) continue;
 
@@ -91,11 +95,12 @@ void main(){
         //finally take projected view dep curvature derivative
         float projDistance = dot((p-v0),world_t1);
         projDistance *= abs(normalDotView);
+        //if(abs(projDistance)<epsilon) {Dt1q1=MAX_FLOAT; break;}
         Dt1q1 += (interpViewDepCurv - viewDepCurv) / projDistance;
         n++;
     }
 
-    Dt1q1/=float(n);
+    Dt1q1 /= float(n);
     Dt1q1s[id] = Dt1q1;
 
 }

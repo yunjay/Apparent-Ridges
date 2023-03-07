@@ -74,7 +74,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
    if (k12 < 0.0)
       k12 = 0.0;
 
-   // Skip lines that you can't see...
+   // Skip lines that you can't see
    if (k01 == 0.0 && k12 == 0.0)
       return;
 
