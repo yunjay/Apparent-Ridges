@@ -24,7 +24,7 @@ in VertexData{
     float Dt1q1;
     uint id;
 } geometryIn[]; //instance name can be different from vertex shader stage
-//gl_in[] for gl_PerVertex which carries gl_Position
+//gl_in[] for gl_PerVertex which carries gl_Position (Built in)
 //geometryIn[] for the output we made
 uniform vec3 viewPosition;
 uniform float threshold;
@@ -78,8 +78,8 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
    if (k01 == 0.0 && k12 == 0.0)
       return;
 
-   // Perform test: do the tmax-es point *towards* the segment? (Fig 6)
-   if (do_test) {
+   // Test if tmax-es point *towards* the segment
+   //if (do_test) {
       // Find the vector perpendicular to the segment (p01 <-> p12)
       vec3 perp =cross( 0.5*cross((geometryIn[v1].pos-geometryIn[v0].pos),(geometryIn[v2].pos-geometryIn[v0].pos)), p01 - p12);
       // We want tmax1 to point opposite to perp, and
@@ -88,7 +88,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
           (dot(tmax1,perp)) >= 0.0 ||
           (dot(tmax2,perp)) <= 0.0)
          return;
-   }
+   //}
 
    // Faded lines
    if (drawFaded) {

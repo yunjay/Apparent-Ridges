@@ -6,7 +6,7 @@ layout(binding = 9, std430) readonly buffer vertexBuffer{
 layout(binding = 11, std430) readonly buffer indexBuffer{
     uint indices[];
 };
-layout(binding = 20, std430) buffer adjacentFacesBuffer{
+layout(binding = 20, std430) coherent buffer adjacentFacesBuffer{
     int adjFaces[][20];
 };
 uniform uint indicesSize;

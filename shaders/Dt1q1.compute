@@ -53,9 +53,9 @@ void main(){
     float normalDotView = dot(viewDir,normal);
 
      //vec3 maxPD = PDs[id].xyz;
-    vec3 maxPD = normalize(vec3(model*vec4(PDs[id].xyz,1.0)));
+    vec3 maxPD = normalize(vec3(model*vec4(PDs[id].xyz,0.0)));
     //vec3 minPD = PDs[id+verticesSize].xyz;
-    vec3 minPD = normalize(vec3(model*vec4(PDs[id+verticesSize].xyz,1.0)));
+    vec3 minPD = normalize(vec3(model*vec4(PDs[id+verticesSize].xyz,0.0)));
     float viewDepCurv = q1s[id];
     vec2 t1 = t1s[id]; //max curv direction
 

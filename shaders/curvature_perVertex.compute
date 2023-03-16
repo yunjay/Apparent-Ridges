@@ -3,11 +3,11 @@
 //defines the size of the local work group. Max is 1024 on my device (2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 //layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-layout(binding = 7, std430)  buffer PDBuffer{
+layout(binding = 7, std430) coherent buffer PDBuffer{
     vec4 PDs[];
 };
 //SSBO for principal curvatures
-layout(binding = 8, std430)  buffer curvatureBufffer{
+layout(binding = 8, std430) coherent buffer curvatureBufffer{
     float curvatures[];
 };
 // so we'll be indexing vertices using global index with /3 and %3 I guess?
@@ -20,14 +20,14 @@ layout(binding = 10, std430) readonly buffer normalBuffer{
 layout(binding = 11, std430) readonly buffer indexBuffer{
     uint indices[];
 };
-layout(binding = 12, std430)  buffer curv1Bufffer{
-    float curv1buffer[];
+layout(binding = 15, std430) readonly buffer curv1IntBuffer{
+    int curv1Ints[];
 };
-layout(binding = 13, std430)  buffer curv2Bufffer{
-    float curv2buffer[];
+layout(binding = 16, std430) readonly buffer curv2IntBuffer{
+    int curv2Ints[];
 };
-layout(binding = 14, std430)  buffer curv12Bufffer{
-    float curv12buffer[];
+layout(binding = 17, std430) readonly buffer curv12IntBuffer{
+    int curv12Ints[];
 };
 uniform uint indicesSize;
 uniform uint verticesSize;
@@ -48,11 +48,9 @@ void rotCoordSys(vec3 old_u,  vec3 old_v,
 	// Perpendicular to old_norm and in the plane of old_norm and new_norm
 	vec3 perp_old = new_norm - ndot * old_norm;
 	// Perpendicular to new_norm and in the plane of old_norm and new_norm
-	// vec perp_new = ndot * new_norm - old_norm;
-	// perp_old - perp_new, with normalization constants folded in
 	vec3 dperp = 1.0 / (1 + ndot) * (old_norm + new_norm);
-	// Subtracts component along perp_old, and adds the same amount along
-	// perp_new.  Leaves unchanged the component perpendicular to the
+	// Subtracts component along perp_old, and adds the same amount along perp_new.  
+    // Leaves unchanged the component perpendicular to the
 	// plane containing old_norm and new_norm.
 	new_u -= dperp * (dot(new_u, perp_old));
 	new_v -= dperp * (dot(new_v, perp_old));
@@ -64,11 +62,14 @@ void main(){
     if(invocationID > verticesSize)return;
 
     vec3 normal = normals[invocationID].xyz;
-
+/*
     float curv1 = curv1buffer[invocationID];
     float curv2 = curv2buffer[invocationID];
     float curv12 = curv12buffer[invocationID];
-
+*/
+    float curv1 = intBitsToFloat(curv1Ints[invocationID]);
+    float curv2 = intBitsToFloat(curv2Ints[invocationID]);
+    float curv12 = intBitsToFloat(curv12Ints[invocationID]);
 
     vec3 pd1 = PDs[invocationID].xyz; //id
     vec3 pd2 = PDs[invocationID+verticesSize].xyz; //id+size

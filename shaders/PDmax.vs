@@ -28,7 +28,7 @@ void main()
     vec3 minPD = vec3(PDs[gl_VertexID+size]);
     */
  
-    vs_out.maxPrincipal = mat3(transpose(inverse(view*model))) * vec3(maxPD);
-    vs_out.minPrincipal = mat3(transpose(inverse(view*model))) * vec3(minPD);
+    vs_out.maxPrincipal = normalize(mat3(view*model) * vec3(maxPD));
+    vs_out.minPrincipal = normalize(mat3(view*model) * vec3(minPD));
 
 }

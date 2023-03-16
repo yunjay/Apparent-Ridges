@@ -3,6 +3,7 @@ out vec4 color;
 
 
 void main()
-{
-    color = vec4(0.2, 0.95, 0.4, 1.0);
+{   
+    //min = red
+    color = vec4(171.0/255.0, 68.0/255.0, 60.0/255.0, 1.0);
 }

@@ -1,9 +1,17 @@
-#version 430 core 
+#version 460 
+//Since GLSL4, doubles are enabled. Maybe swap to doubles for accuracy.
+//In glsl, 1.0 -> float.(single precision)
+//1.0lf -> double!
+
+//If float atomics are supported (They're not for older devices)
+#ifdef GL_EXT_shader_atomic_float
+#extension GL_EXT_shader_atomic_float : require
+#endif
 //Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
 //defines the size of the local work group. Max is 1024 on my device (2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 //layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
-layout(binding = 7, std430)  buffer PDBuffer{
+layout(binding = 7, std430) buffer PDBuffer{
     vec4 PDs[];
 };
 //SSBO for principal curvatures
@@ -20,26 +28,57 @@ layout(binding = 10, std430) readonly buffer normalBuffer{
 layout(binding = 11, std430) readonly buffer indexBuffer{
     uint indices[];
 };
-layout(binding = 12, std430)  buffer curv1Bufffer{
+layout(binding = 12, std430) coherent buffer curv1Bufffer{
     float curv1buffer[];
 };
-layout(binding = 13, std430)  buffer curv2Bufffer{
+layout(binding = 13, std430) coherent buffer curv2Bufffer{
     float curv2buffer[];
 };
-layout(binding = 14, std430)  buffer curv12Bufffer{
+layout(binding = 14, std430) coherent buffer curv12Bufffer{
     float curv12buffer[];
 };
-
-layout(binding = 30, std430) buffer pointAreaBuffer{
-    float pointAreas[]; //by vertex
+layout(binding = 15, std430) coherent buffer curv1IntBuffer{
+    int curv1Ints[];
 };
-layout(binding = 31, std430) buffer cornerAreaBuffer{
+layout(binding = 16, std430) coherent buffer curv2IntBuffer{
+    int curv2Ints[];
+};
+layout(binding = 17, std430) coherent buffer curv12IntBuffer{
+    int curv12Ints[];
+};
+layout(binding = 30, std430) readonly buffer pointAreaBuffer{
+    int pointAreas[]; //by vertex
+};
+layout(binding = 31, std430) readonly buffer cornerAreaBuffer{
     float cornerAreas[]; //by index
 };
 //Calculate by face then by vertex
 uniform uint indicesSize;
 uniform uint verticesSize;
-
+void rotCoordSys(vec3 old_u,  vec3 old_v,
+                          vec3 new_norm,
+                          out vec3 new_u, out vec3 new_v)
+{
+	new_u = old_u;
+	new_v = old_v;
+	vec3 old_norm = cross(old_u,old_v);
+	float ndot = dot(old_norm, new_norm);
+	if (ndot <= -1.0) {
+		new_u = -new_u;
+		new_v = -new_v;
+		return;
+	}   
+	// Perpendicular to old_norm and in the plane of old_norm and new_norm
+	vec3 perp_old = new_norm - ndot * old_norm;
+	// Perpendicular to new_norm and in the plane of old_norm and new_norm
+	vec3 dperp = 1.0 / (1 + ndot) * (old_norm + new_norm);
+	// Subtracts component along perp_old, and adds the same amount along perp_new.  
+    // Leaves unchanged the component perpendicular to the
+	// plane containing old_norm and new_norm.
+	new_u -= dperp * (dot(new_u, perp_old));
+	new_v -= dperp * (dot(new_v, perp_old));
+    return;
+}
 void main(){
     //Just shove it all into 1D? Our vertex information is in a 1D array so...
     uint invocationID = gl_GlobalInvocationID.x; //starts with 0
@@ -51,21 +90,20 @@ void main(){
     uint faceID = 3*invocationID;
     if(faceID >= indicesSize) return;
     
-    uint v0id=indices[faceID];
-    uint v1id=indices[faceID+1];
-    uint v2id=indices[faceID+2]; 
-    
+    uint vertexIds[3] = {indices[faceID],
+                    indices[faceID+1],
+                    indices[faceID+2]};
     //vertices
     vec3 verticesOnFace[3] = {
-        vec3(vertices[v0id]),
-        vec3(vertices[v1id]),
-        vec3(vertices[v2id])
+        vec3(vertices[vertexIds[0]]),
+        vec3(vertices[vertexIds[1]]),
+        vec3(vertices[vertexIds[2]])
     };
     //normals
     vec3 normalsOnFace[3]={
-        normalize(vec3(normals[v0id])),
-        normalize(vec3(normals[v1id])),
-        normalize(vec3(normals[v2id]))
+        normalize(vec3(normals[vertexIds[0]])),
+        normalize(vec3(normals[vertexIds[1]])),
+        normalize(vec3(normals[vertexIds[2]]))
     };
     //edges
     vec3 edges[3]={
@@ -81,9 +119,9 @@ void main(){
     };
     //Point areas of vertices on the face
     float pointAreasOnFace[3]={
-        pointAreas[v0id],
-        pointAreas[v1id],
-        pointAreas[v2id]
+        intBitsToFloat(pointAreas[vertexIds[0]]),
+        intBitsToFloat(pointAreas[vertexIds[1]]),
+        intBitsToFloat(pointAreas[vertexIds[2]])
     };
 
     //initial coordinate system by vertex
@@ -214,26 +252,79 @@ void main(){
     }
     
     //Is it ok to add concurrently?
-    curv1buffer[v0id] += curv1[0];
-    curv1buffer[v1id] += curv1[1];
-    curv1buffer[v2id] += curv1[2];
+    //NO!!!
+    //Not safe to write to the same index of a SSBO from multiple instances!
+    /*
+#ifdef GL_EXT_shader_atomic_float
+    atomicAdd(curv1buffer[v0id], curv1[0]);
+    atomicAdd(curv1buffer[v1id], curv1[1]);
+    atomicAdd(curv1buffer[v2id], curv1[2]);
+    
+    atomicAdd(curv2buffer[v0id], curv2[0]);
+    atomicAdd(curv2buffer[v1id], curv2[1]);
+    atomicAdd(curv2buffer[v2id], curv2[2]);
+    
+    atomicAdd(curv12buffer[v0id], curv12[0]);
+    atomicAdd(curv12buffer[v1id], curv12[1]);
+    atomicAdd(curv12buffer[v2id], curv12[2]);
+#endif
+#ifndef GL_EXT_shader_atomic_float
+#endif
+    */ 
+//For future devices
+    
+    //Because my machine doesn't allow atomic floats, (NVidia new cards do, but not AMD anyway.)
+    //Implemented "await" like code for checking if the data is being changed by another invocation.
+    for(int i =0;i<3;i++){
+        float toAdd = curv1[i];
+        int expected = curv1Ints[vertexIds[i]];
+        //Input float we want to put into the memory (curv1current[vec]+curv1sum[vec])
+        float toInput = intBitsToFloat(curv1Ints[vertexIds[i]]) + toAdd;
+        //Atomically compare the int encodeded float value with our expected value
+        //float encoded to int with floatBitsToInt, bc atomics aren't supported for floats in OpenGL.
+        //If true, we add successfully and end.  
+        //atomic compare and swap (if compare is true, swaps data with 3rd parameter. if(a==b)a=c;)
+        //returns original value at mem (first parameter) 
+        int returned = atomicCompSwap(curv1Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        //If it failed, as in the returned value is different from our original value,
+        //it means a different invocation updated it, so we update our original value and try again.
+        while(returned != expected){
+            //update values
+            expected = returned; 
+            toInput = intBitsToFloat(expected) + toAdd;
+            returned = atomicCompSwap(curv1Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        }
+        // Now we do this for all three values of the curvature tensor (symmetric 2x2 matrix)
+        // Could we make this a function..? How do I send memory locations without pointers though?
+        toAdd = curv2[i];
+        expected = curv2Ints[vertexIds[i]];
+        toInput = intBitsToFloat(curv2Ints[vertexIds[i]]) + toAdd;
+        returned = atomicCompSwap(curv2Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        while(returned != expected){
+            //update values
+            expected = returned; 
+            toInput = intBitsToFloat(expected) + toAdd;
+            returned = atomicCompSwap(curv2Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        }
 
-    curv2buffer[v0id] += curv2[0];
-    curv2buffer[v1id] += curv2[1];
-    curv2buffer[v2id] += curv2[2];
+        toAdd = curv12[i];
+        expected = curv12Ints[vertexIds[i]];
+        toInput = intBitsToFloat(curv12Ints[vertexIds[i]]) + toAdd;
+        returned = atomicCompSwap(curv12Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        while(returned != expected){
+            //update values
+            expected = returned; 
+            toInput = intBitsToFloat(expected) + toAdd;
+            returned = atomicCompSwap(curv12Ints[vertexIds[i]],expected,floatBitsToInt(toInput));
+        }
 
-    curv12buffer[v0id] += curv12[0];
-    curv12buffer[v1id] += curv12[1];
-    curv12buffer[v2id] += curv12[2];
-
+    }
 
     //intial coords
-    PDs[v0id] = vec4(pd1[0],0.0);
-    PDs[v1id] = vec4(pd1[1],0.0);
-    PDs[v2id] = vec4(pd1[2],0.0);
-
-    PDs[v0id+verticesSize] = vec4(pd2[0],0.0);
-    PDs[v1id+verticesSize] = vec4(pd2[1],0.0);
-    PDs[v2id+verticesSize] = vec4(pd2[2],0.0);
-//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS MIGHT have been easier.
+    for(int i =0 ; i<3 ; i++){
+        PDs[vertexIds[i]] = vec4(pd1[i],0.0);
+        PDs[vertexIds[i]+verticesSize] = vec4(pd2[i],0.0);
+    }
 }
+
+//In retrospect using a VS-GS-FS pipeline to calculate these per face on the GS MIGHT have been easier.

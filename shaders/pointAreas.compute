@@ -1,6 +1,9 @@
 #version 460  
+#ifdef GL_EXT_shader_atomic_float
+#extension GL_EXT_shader_atomic_float : require
+#endif
 //Using method from "Estimating Curvatures and Their Derivatives on Triangle Meshes", Rusinkiewicz, Szymon.
-//defines the size of the local work group. Max is 1024 on my device (2060)
+//defines the size of the local work group. Max is 1024 on my device (rtx 2060)
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
 //layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -14,8 +17,8 @@ layout(binding = 10, std430) readonly buffer normalBuffer{
 layout(binding = 11, std430) readonly buffer indexBuffer{
     uint indices[];
 };
-layout(binding = 30, std430) buffer pointAreaBuffer{
-    float pointAreas[]; //by vertex
+layout(binding = 30, std430) coherent buffer pointAreaBuffer{
+    int pointAreas[]; //by vertex
 };
 layout(binding = 31, std430) buffer cornerAreaBuffer{
     float cornerAreas[]; //by index
@@ -29,22 +32,24 @@ void main(){
     uint faceID = 3*invocationID;
     //indices
     if(faceID >= indicesSize) return;
-    
-    uint v0id=indices[faceID];
-    uint v1id=indices[faceID+1];
-    uint v2id=indices[faceID+2]; 
+
+    uint vertexIds[3] = {
+        indices[faceID],
+        indices[faceID+1],
+        indices[faceID+2]
+    };
     
     //vertices
     vec3 verticesOnFace[3] = {
-        vec3(vertices[v0id]),
-        vec3(vertices[v1id]),
-        vec3(vertices[v2id])
+        vec3(vertices[vertexIds[0]]),
+        vec3(vertices[vertexIds[1]]),
+        vec3(vertices[vertexIds[2]])
     };
     //normals
     vec3 normalsOnFace[3]={
-        vec3(normals[v0id]),
-        vec3(normals[v1id]),
-        vec3(normals[v2id])
+        vec3(normals[vertexIds[0]]),
+        vec3(normals[vertexIds[1]]),
+        vec3(normals[vertexIds[2]])
     };
     //edges
     vec3 edges[3]={
@@ -104,8 +109,33 @@ void main(){
     cornerAreas[faceID+1] = cornerAreasTmp[1];
     cornerAreas[faceID+2] = cornerAreasTmp[2];
 
+    
     //Add to point areas (total of corner areas)
+    //YOU CANT DO THIS
+    /*
     pointAreas[v0id] += cornerAreasTmp[0];
     pointAreas[v1id] += cornerAreasTmp[1];
     pointAreas[v2id] += cornerAreasTmp[2];
+    */
+    for(int i =0;i<3;i++){
+        float toAdd = cornerAreasTmp[i];
+        int expected = pointAreas[vertexIds[i]];
+        //Input float we want to put into the memory
+        float toInput = intBitsToFloat(pointAreas[vertexIds[i]]) + toAdd;
+        //Atomically compare the int encodeded float value with our expected value
+        //float encoded to int with floatBitsToInt, bc atomics aren't supported for floats in OpenGL.
+        //If true, we add successfully and end.  
+        //atomic compare and swap (if compare is true, swaps data with 3rd parameter. if(a==b)a=c;)
+        //returns original value at mem (first parameter) 
+        int returned = atomicCompSwap(pointAreas[vertexIds[i]], expected, floatBitsToInt(toInput));
+        //If it failed, as in the returned value is different from our original value,
+        //it means a different invocation updated it, so we update our original value and try again.
+        while(returned != expected){
+            //update values
+            expected = returned; 
+            toInput = intBitsToFloat(expected) + toAdd;
+            returned = atomicCompSwap(pointAreas[vertexIds[i]],expected,floatBitsToInt(toInput));
+        }
+    }
+    
 }
