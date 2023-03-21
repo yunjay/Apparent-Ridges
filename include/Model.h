@@ -1,11 +1,14 @@
 #include<memory>
-
 #include <vector>
 #include <array>
 #include <iostream>
 #include <string>
 #include <fstream>
 #include <chrono>
+#include <algorithm>
+
+#include <omp.h>
+
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 
@@ -16,12 +19,12 @@
 #include "LoadShader.h"
 using glm::vec3; using glm::vec4;
 const unsigned int workGroupSize = 1024;
-bool loadAssimp(const char* path,std::vector<glm::vec3>& out_vertices,std::vector<glm::vec3>& out_normals,std::vector<unsigned int>& out_indices);
+bool loadAssimp(const char* path, std::vector<glm::vec3>& out_vertices, std::vector<glm::vec3>& out_normals, std::vector<unsigned int>& out_indices);
 void printVec(glm::vec3 v) {
-	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ") ";
+	std::cout << "(" << v.x << ", " << v.y << ", " << v.z << ") ";
 }
 void printVec(glm::vec4 v) {
-	std::cout <<"(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ") ";
+	std::cout << "(" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << ") ";
 }
 
 class Model {
@@ -31,7 +34,7 @@ public:
 	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, EBO;
 	GLuint PDBuffer, CurvatureBuffer;
 	GLuint maxPDVBO, maxCurvVBO, minPDVBO, minCurvVBO;
-	GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer; 
+	GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
 	//q1 : max view-dep curvature, t1 : max view-dep curvature direction
 	//Dt1q1 : max view-dependent curvature's directional derivative in direction t1
 	//TODO : These should be static
@@ -43,7 +46,7 @@ public:
 
 	std::vector<glm::vec3> vertices;
 	std::vector<glm::vec3> normals;
-	std::vector<std::array<unsigned int,3>> faces;
+	std::vector<std::array<unsigned int, 3>> faces;
 	std::vector<glm::vec2> textureCoordinates;
 	std::vector<glm::vec3> tangents;
 	std::vector<glm::vec3> bitangents;
@@ -85,11 +88,11 @@ public:
 
 	Model(std::string path) {
 		this->path = path;
-		if (!this->loadAssimp()) { std::cout << "Model at "<<path<<" not loaded!\n"; };
+		if (!this->loadAssimp()) { std::cout << "Model at " << path << " not loaded!\n"; };
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
-		this->computeCurvatures(); 
+		this->computeCurvatures();
 		this->findAdjacentFaces();
 		this->setup();
 	}
@@ -135,7 +138,7 @@ public:
 		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 		// Principal Directions / Principal Curvatures (As VBOs)
-		if(this->curvaturesCalculated){
+		if (this->curvaturesCalculated) {
 			glGenBuffers(1, &maxPDVBO); //3
 			glGenBuffers(1, &minPDVBO); //4
 			glGenBuffers(1, &maxCurvVBO); //5
@@ -145,33 +148,33 @@ public:
 			//void glGetNamedBufferSubData(	GLuint buffer,GLintptr offset,GLsizeiptr size,void *data);
 			//buffer -> handle, offset -> start of data to read, size -> size of data to be read, *data -> pointer to return data
 
-			
+
 			for (int dbg = 0; dbg < 2; dbg++) {
-				std::cout << "PrincipalCurvatures["<< dbg <<"] " << PrincipalCurvatures[dbg] << "\n";
-				std::cout << "PrincipalCurvatures["<< vertices.size() + dbg <<"] " << PrincipalCurvatures[vertices.size() + dbg] << "\n";
+				std::cout << "PrincipalCurvatures[" << dbg << "] " << PrincipalCurvatures[dbg] << "\n";
+				std::cout << "PrincipalCurvatures[" << vertices.size() + dbg << "] " << PrincipalCurvatures[vertices.size() + dbg] << "\n";
 			}
-			
+
 
 			//Send PDs / PCs as attrbutes per vertex, just to uncomplicate some of this process.
-			glBindBuffer(GL_ARRAY_BUFFER,maxPDVBO);
-			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),PDs.data(),GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, maxPDVBO);
+			glBufferData(GL_ARRAY_BUFFER, PDs.size() / 2 * sizeof(glm::vec4), PDs.data(), GL_STATIC_DRAW);
 			glEnableVertexAttribArray(3);
-			glVertexAttribPointer(3,4,GL_FLOAT,GL_FALSE,0,(void*)0); //Our PDs are vec4s due to SSBO reasons.
+			glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, (void*)0); //Our PDs are vec4s due to SSBO reasons.
 
-			glBindBuffer(GL_ARRAY_BUFFER,minPDVBO);
-			glBufferData(GL_ARRAY_BUFFER,PDs.size()/2*sizeof(glm::vec4),&PDs[this->vertices.size()],GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, minPDVBO);
+			glBufferData(GL_ARRAY_BUFFER, PDs.size() / 2 * sizeof(glm::vec4), &PDs[this->vertices.size()], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(4);
-			glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-			glBindBuffer(GL_ARRAY_BUFFER,maxCurvVBO);
-			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),PrincipalCurvatures.data(),GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, maxCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), PrincipalCurvatures.data(), GL_STATIC_DRAW);
 			glEnableVertexAttribArray(5);
-			glVertexAttribPointer(5,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(5, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
-			glBindBuffer(GL_ARRAY_BUFFER,minCurvVBO);
-			glBufferData(GL_ARRAY_BUFFER,PrincipalCurvatures.size()/2*sizeof(GLfloat),&PrincipalCurvatures[this->vertices.size()],GL_STATIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, minCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), &PrincipalCurvatures[this->vertices.size()], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(6);
-			glVertexAttribPointer(6,1,GL_FLOAT,GL_FALSE,0,(void*)0);
+			glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 
 			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
@@ -180,18 +183,18 @@ public:
 		else { this->computeCurvatures(); this->setup(); }
 
 		//adjacent faces
-		
+
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
 		glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(glm::vec4), adjacentFaces.data());
 		for (int dbg = 0; dbg < 1; dbg++) {
-			std::cout << "Adjacent to " << dbg<<" : ";
+			std::cout << "Adjacent to " << dbg << " : ";
 			for (int j = 0; j < 10; j++) {
 				std::cout << adjacentFaces[dbg][2 * j] << ", " << adjacentFaces[dbg][2 * j + 1] << ". ";
 			}
 			std::cout << "\n";
 		}
 
-		q1s.resize(this->numVertices,0.0f);
+		q1s.resize(this->numVertices, 0.0f);
 		glGenBuffers(1, &q1Buffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, q1Buffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, q1s.size() * sizeof(GLfloat), q1s.data(), GL_DYNAMIC_DRAW);
@@ -239,16 +242,16 @@ public:
 				std::cout << "PDs : ";
 				for (int dbg = 0; dbg < 2; dbg++) {
 					printVec(PDs[dbg]); std::cout << ", ";
-					printVec(PDs[dbg+this->numVertices]); std::cout << ", ";
+					printVec(PDs[dbg + this->numVertices]); std::cout << ", ";
 				}
 				std::cout << "\n";
 				glGetNamedBufferSubData(CurvatureBuffer, 0, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data());
 				std::cout << "PrincipalCurvatures : ";
 				for (int dbg = 0; dbg < 2; dbg++) {
 					std::cout << PrincipalCurvatures[dbg] << ", ";
-					std::cout << PrincipalCurvatures[dbg+this->numVertices] << ", ";
+					std::cout << PrincipalCurvatures[dbg + this->numVertices] << ", ";
 				}
-				std::cout << "\n"; 
+				std::cout << "\n";
 				glGetNamedBufferSubData(this->q1Buffer, 0, q1s.size() * sizeof(GLfloat), q1s.data());
 				std::cout << "q1s : ";
 				for (int dbg = 0; dbg < 4; dbg++) {
@@ -273,7 +276,7 @@ public:
 			//Compute View-dep curvatures (q1), and direction (t1)
 			glUseProgram(viewDepCurvatureCompute);
 			glUniform1ui(glGetUniformLocation(viewDepCurvatureCompute, "verticesSize"), this->numVertices);
-			
+
 			glUniformMatrix4fv(glGetUniformLocation(viewDepCurvatureCompute, "model"), 1, GL_FALSE, &this->modelMatrix[0][0]);
 
 			glDispatchCompute(glm::ceil(GLfloat(this->numVertices) / float(workGroupSize)), 1, 1);
@@ -320,7 +323,7 @@ public:
 				glGetNamedBufferSubData(t1Buffer, 0, t1s.size() * sizeof(GLfloat), t1s.data());
 				std::cout << "t1s : ";
 				for (int dbg = 0; dbg < maxdbg; dbg++) {
-					std::cout <<"("<< t1s[dbg].x << "," << t1s[dbg].y << "), ";
+					std::cout << "(" << t1s[dbg].x << "," << t1s[dbg].y << "), ";
 				}
 				std::cout << "\n";
 				glGetNamedBufferSubData(Dt1q1Buffer, 0, Dt1q1s.size() * sizeof(GLfloat), Dt1q1s.data());
@@ -331,9 +334,9 @@ public:
 				std::cout << "\n";
 				printed = true;
 			}
-			
-		}
 
+		}
+		glBindVertexArray(VAO);
 		glUseProgram(shader);
 
 		//glDrawElements(GL_LINES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
@@ -350,7 +353,7 @@ public:
 		//simple implemetation calculating model boundary box size
 		float maxX = vertices[0].x, maxY = vertices[0].y, maxZ = vertices[0].z;
 		float minX = vertices[0].x, minY = vertices[0].y, minZ = vertices[0].z;
-		
+
 		for (int i = 1; i < vertices.size(); i++) {
 			(vertices[i].x > maxX) ? maxX = vertices[i].x : 0;
 			(vertices[i].y > maxY) ? maxY = vertices[i].y : 0;
@@ -362,7 +365,7 @@ public:
 		//center of model
 		this->center = glm::vec3((maxX + minX) / 2.0f, (maxY + minY) / 2.0f, (maxZ + minZ) / 2.0f);
 		this->diagonalLength = glm::length(glm::vec3(maxX - minX, maxY - minY, maxZ - minZ));
-		this->modelScaleFactor = 1.0f/diagonalLength;
+		this->modelScaleFactor = 1.0f / diagonalLength;
 	}
 	float getMinDistance() {
 		float minDist = glm::length(vertices[0] - vertices[1]);
@@ -379,6 +382,9 @@ public:
 		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
 		auto start = std::chrono::high_resolution_clock::now();
+
+		//constexpr bool isCPUMode = false;
+		constexpr bool isCPUMode = true;
 
 		//So we need to initially compute by face.
 		//Load compute shader
@@ -454,7 +460,7 @@ public:
 		GLuint curv1intBuffer, curv2intBuffer, curv12intBuffer;
 		std::vector<GLint> curv1ints, curv2ints, curv12ints;
 		curv1ints.resize(vertices.size(), GLint{ 0 }); curv2ints.resize(vertices.size(), GLint{ 0 }); curv12ints.resize(vertices.size(), GLint{ 0 });
-		
+
 		glGenBuffers(1, &curv1intBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, curv1intBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, curv1ints.size() * sizeof(GLint), curv1ints.data(), GL_DYNAMIC_DRAW);
@@ -479,7 +485,7 @@ public:
 		//hmm.. we move by indices so send indicies size.
 		glUniform1ui(glGetUniformLocation(perFace, "indicesSize"), this->numIndices);
 		glUniform1ui(glGetUniformLocation(perFace, "verticesSize"), this->numVertices);
-		
+
 		//Dispatch -> run compute shader in GPU 
 		//As we have workGroupSize invocations per work group, to run per face :
 		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / float(workGroupSize)), 1, 1);
@@ -525,67 +531,67 @@ public:
 
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end - start;
-		std::cout << "Curvatures for " << this->path << " calculated on compute shader. Took "<<elapsed_seconds.count()<<" seconds.\n";
+		std::cout << "Curvatures for " << this->path << " calculated on compute shader. Took " << elapsed_seconds.count() << " seconds.\n";
 		glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
 		glGetNamedBufferSubData(CurvatureBuffer, 0, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data());
 
-		//constexpr bool isCPUMode = true;
-		constexpr bool isCPUMode = false;
 		if constexpr (isCPUMode) {
 			start = std::chrono::high_resolution_clock::now();
 			std::vector<float> curv1s, curv2s, curv12s;
-			std::vector<vec4> cpuPDs;
+			std::vector<vec3> pd1, pd2;
 			curv1s.resize(this->numVertices, 0.0f); curv2s.resize(this->numVertices, 0.0f); curv12s.resize(this->numVertices, 0.0f);
-			cpuPDs.resize(PDs.size(), vec4(0.0f));
-			for (int face = 0; face < this->numIndices/3; face++) {
+			pd1.resize(this->numVertices, vec3(0.0f)); pd2.resize(this->numVertices, vec3(0.0f));
+
+			//Initial local coordinates
+#pragma omp parallel for
+			for (size_t face = 0; face < this->numFaces; face++) {
 				int faceID = 3 * face;
-				int vertexIds[3] = { indices[faceID],
-								indices[faceID + 1],
-								indices[faceID + 2] };
+				int vertexIds[3] = {
+					indices[faceID],
+					indices[faceID + 1],
+					indices[faceID + 2]
+				};
+				pd1[vertexIds[0]] = vertices[vertexIds[1]] - vertices[vertexIds[0]];
+				pd1[vertexIds[1]] = vertices[vertexIds[2]] - vertices[vertexIds[1]];
+				pd1[vertexIds[2]] = vertices[vertexIds[0]] - vertices[vertexIds[2]];
+			}
+#pragma omp parallel for
+			for (size_t v = 0; v < this->numVertices; v++) {
+				pd1[v] = glm::normalize(glm::cross(pd1[v], normals[v]));
+				pd2[v] = glm::cross(normals[v], pd1[v]);
+			}
+#pragma omp parallel for
+			for (size_t face = 0; face < this->numFaces; face++) {
+				int faceID = 3 * face;
+				int vertexIds[3] = {
+					indices[faceID],
+					indices[faceID + 1],
+					indices[faceID + 2]
+				};
 				vec3 verticesOnFace[3] = {
-				vec3(vertices[vertexIds[0]]),
-				vec3(vertices[vertexIds[1]]),
-				vec3(vertices[vertexIds[2]])
+					vertices[vertexIds[0]],
+					vertices[vertexIds[1]],
+					vertices[vertexIds[2]]
 				};
-				//normals
 				vec3 normalsOnFace[3] = {
-				normalize(vec3(normals[vertexIds[0]])),
-				normalize(vec3(normals[vertexIds[1]])),
-				normalize(vec3(normals[vertexIds[2]]))
+					normalize(normals[vertexIds[0]]),
+					normalize(normals[vertexIds[1]]),
+					normalize(normals[vertexIds[2]])
 				};
-				//edges
 				vec3 edges[3] = {
-				verticesOnFace[2] - verticesOnFace[1],
-				verticesOnFace[0] - verticesOnFace[2],
-				verticesOnFace[1] - verticesOnFace[0],
+					verticesOnFace[2] - verticesOnFace[1],
+					verticesOnFace[0] - verticesOnFace[2],
+					verticesOnFace[1] - verticesOnFace[0],
 				};
-				//Corner Areas of face
 				float cornerAreasOnFace[3] = {
 					this->cornerAreas[faceID],
 					this->cornerAreas[faceID + 1],
 					this->cornerAreas[faceID + 2]
 				};
-				//Point areas of vertices on the face
 				float pointAreasOnFace[3] = {
-				glm::intBitsToFloat(pointAreas[vertexIds[0]]),
-				glm::intBitsToFloat(pointAreas[vertexIds[1]]),
-				glm::intBitsToFloat(pointAreas[vertexIds[2]])
-				};
-
-				//initial coordinate system by vertex
-				vec3 pd1[3] = {
-				verticesOnFace[1] - verticesOnFace[0],
-				verticesOnFace[2] - verticesOnFace[1],
-				verticesOnFace[0] - verticesOnFace[2]
-				};
-				pd1[0] = normalize(cross(pd1[0], normalsOnFace[0]));
-				pd1[1] = normalize(cross(pd1[1], normalsOnFace[1]));
-				pd1[2] = normalize(cross(pd1[2], normalsOnFace[2]));
-
-				vec3 pd2[3] = {
-				normalize(cross(normalsOnFace[0],pd1[0])),
-				normalize(cross(normalsOnFace[1],pd1[1])),
-				normalize(cross(normalsOnFace[2],pd1[2]))
+					glm::intBitsToFloat(pointAreas[vertexIds[0]]),
+					glm::intBitsToFloat(pointAreas[vertexIds[1]]),
+					glm::intBitsToFloat(pointAreas[vertexIds[2]])
 				};
 
 				//Set normal, tangent, bitangent per face
@@ -599,7 +605,7 @@ public:
 				// w :
 				float m[3] = { 0.0f, 0.0f, 0.0f };
 				float w[3][3] = { {0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f}, {0.0f,0.0f,0.0f} };
-				for (int i = 0; i < 3; i++) {
+				for (size_t i = 0; i < 3; i++) {
 					//using the tangent - bitangent as uv coords
 					float u = dot(edges[i], faceTangent);
 					float v = dot(edges[i], faceBitangent);
@@ -607,8 +613,9 @@ public:
 					w[0][1] += u * v;
 					w[2][2] += v * v;
 
-					int prev = (i + 2) % 3;
-					int next = (i + 1) % 3;
+					size_t prev = (i + 2) % 3;
+					size_t next = (i + 1) % 3;
+
 					// finite difference for dn
 					vec3 dn = normalsOnFace[prev] - normalsOnFace[next];
 					float dnu = dot(dn, faceTangent);
@@ -622,7 +629,8 @@ public:
 				w[1][2] = w[0][1];
 
 				//Solve least squares!
-				float diagonal[3] = { 0,0,0 };
+				float diagonal[3] = { 0.0f,0.0f,0.0f };
+
 				//LDLT Decomposition
 				float d0 = w[0][0];
 				diagonal[0] = 1.0f / d0;
@@ -654,31 +662,13 @@ public:
 				}
 
 				//Curvature tensor for each vertex of the face
-				float curv1[3] = { 0.0f, 0.0f, 0.0f };
-				float curv12[3] = { 0.0f, 0.0f, 0.0f };
-				float curv2[3] = { 0.0f, 0.0f, 0.0f };
 				for (int i = 0; i < 3; i++) {
 					float c1, c12, c2;
 					//Project curvature tensor (2nd form) from the old u,v basis (saved in pd1,pd2)
 					//to the new basis (newU newV)
 					//Rotate back to global coords
-					vec3 newU = pd1[i];
-					vec3 newV = pd2[i];
-					vec3 pastNorm = cross(newU, newV);
-					vec3 newNorm = cross(faceTangent, faceBitangent);
-					float ndot = dot(pastNorm, newNorm);
-					if (ndot <= -1.0f) {
-						newU = -newU;
-						newV = -newV;
-					}
-					else {
-						//vec perpendicular to pastNorm in plane of pastNorm and newNorm
-						vec3 perpendicularToPast = newNorm - ndot * pastNorm;
-						// difference between perpendiculars
-						vec3 diffPerp = 1.0f / (1.0f + ndot) * (pastNorm + newNorm);
-						newU -= diffPerp * dot(newU, perpendicularToPast);
-						newV -= diffPerp * dot(newV, perpendicularToPast);
-					}
+					vec3 newU, newV;
+					rotateCoordSys(pd1[vertexIds[i]], pd2[vertexIds[i]], glm::cross(faceTangent, faceBitangent), newU, newV);
 
 					// projection
 					float u1 = dot(newU, faceTangent);
@@ -693,79 +683,55 @@ public:
 					//weight = corner area / point area 
 					// Voronoi area weighting. 
 					float wt = cornerAreasOnFace[i] / pointAreasOnFace[i];
-
-					curv1[i] += wt * c1;
-					curv12[i] += wt * c12;
-					curv2[i] += wt * c2;
-				}
-				for (int i = 0; i < 3; i++) {
-					cpuPDs[vertexIds[i]] = vec4(pd1[i], 0.0);
-					cpuPDs[vertexIds[i] + numVertices] = vec4(pd2[i], 0.0);
-					//contribute to tensor per face element
-					curv1s[vertexIds[i]] += curv1[i];
-					curv2s[vertexIds[i]] += curv2[i];
-					curv12s[vertexIds[i]] += curv12[i];
+#pragma omp atomic
+					curv1s[vertexIds[i]] += wt * c1;
+#pragma omp atomic
+					curv12s[vertexIds[i]] += wt * c12;
+#pragma omp atomic
+					curv2s[vertexIds[i]] += wt * c2;
 				}
 
 			}//end of for loop per face
-			//per vertex
-			std::vector<float> curvatures; curvatures.resize(numVertices*2,0.0f);
-			for (int verti = 0; verti < numVertices; verti++) {
-				int invocationID = verti; //starts with 0
-				vec3 normal = normals[invocationID];
-				/*
-					float curv1 = curv1buffer[invocationID];
-					float curv2 = curv2buffer[invocationID];
-					float curv12 = curv12buffer[invocationID];
-				*/
-				float curv1 = curv1s[invocationID];
-				float curv2 = curv2s[invocationID];
-				float curv12 = curv12s[invocationID];
+			//loop per vertex
+#pragma omp parallel for
+			for (int v = 0; v < numVertices; v++) {
+				vec3 normal = normals[v];
 
-				vec3 pd1 = vec3(PDs[invocationID]); //id
-				vec3 pd2 = vec3(PDs[invocationID + numVertices]); //id+size
-
+				//rotate back to local face coords
 				vec3 oldU;
 				vec3 oldV;
-				rotCoordSys(pd1, pd2, normal, oldU, oldV);
-
+				rotateCoordSys(pd1[v], pd2[v], normal, oldU, oldV);
+				//-
 				//compute principal directions and curvatures with the curvature tensor (2FF) by eigens
 				//Usually on computers eigenvectors / eigen  values are calculated with iterative QR decomposition 
 				// As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
 				float c = 1, s = 0, tt = 0;
-				if (curv12 != 0.0) {
-					// Jacobi rotation to diagonalize
-					float h = 0.5 * (curv2 - curv1) / curv12;
-					tt = (h < 0.0) ?
-						1.0 / (h - sqrt(1.0 + h * h)) :
-						1.0 / (h + sqrt(1.0 + h * h));
-					c = 1.0 / sqrt(1.0 + tt * tt);
+				if (curv12s[v] != 0.0f) {
+					// Jacobi rotation to diagonalize and get eigens -> Rather use QR
+					float h = 0.5f * (curv2s[v] - curv1s[v]) / curv12s[v];
+					tt = (h < 0.0f) ?
+						1.0f / (h - glm::sqrt(1.0f + h * h)) :
+						1.0f / (h + glm::sqrt(1.0f + h * h));
+					c = 1.0f / glm::sqrt(1.0f + tt * tt);
 					s = tt * c;
 				}
 
-				curv1 = curv1 - tt * curv12;
-				curv2 = curv2 + tt * curv12;
+				curv1s[v] = curv1s[v] - tt * curv12s[v];
+				curv2s[v] = curv2s[v] + tt * curv12s[v];
 				//ensure max curv goes to curv1
-				if (glm::abs(curv1) >= glm::abs(curv2)) {
-					pd1 = c * oldU - s * oldV;
+				if (glm::abs(curv1s[v]) >= glm::abs(curv2s[v])) {
+					pd1[v] = c * oldU - s * oldV;
 				}
 				else {
-					float tmp = curv1; //swap
-					curv1 = curv2; curv2 = tmp;
-					pd1 = s * oldU + c * oldV;
+					std::swap(curv1s[v], curv2s[v]);
+					pd1[v] = s * oldU + c * oldV;
 				}
-				pd2 = glm::cross(normal, pd1);
+				pd2[v] = glm::cross(normal, pd1[v]);
 
-				// write max principal directions first, then min principal directions. (+ size)
-				//Same with curvatures.
-				cpuPDs[invocationID] = vec4(normalize(pd1), 0.0);
-				cpuPDs[invocationID + numVertices] = vec4(normalize(pd2), 0.0);
-
-				curvatures[invocationID] = curv1;
-				curvatures[invocationID + numVertices] = curv2;
+				pd1[v] = glm::normalize(pd1[v]);
+				pd2[v] = glm::normalize(pd2[v]);
 
 			}//end of for loop per vertex
-		
 
 			end = std::chrono::high_resolution_clock::now();
 			elapsed_seconds = end - start;
@@ -773,12 +739,31 @@ public:
 			//calculate error
 			float errDist = 0.0f;
 			double errSum = 0.0;
-			for (int verti = 0; verti < PDs.size(); verti++) {
-				errSum += glm::distance(cpuPDs[verti],PDs[verti]);
+			//OpenMP reduction, takes partial sums and adds them at the end of the loop (Thus no overhead compared to atomic operations.)
+			//OMP just handles savign the partial sum data and freeing it for us.
+#pragma omp parallel for reduction(+:errSum)
+			for (size_t v = 0; v < pd1.size(); v++) {
+				errSum += glm::distance(pd1[v], vec3(PDs[v]));
+				PDs[v] = vec4(pd1[v], 0.0f);
+			}
+#pragma omp parallel for reduction(+:errSum)
+			for (size_t v = 0; v < pd2.size(); v++) {
+				errSum += glm::distance(pd2[v], vec3(PDs[v + numVertices]));
+				PDs[v + numVertices] = vec4(pd2[v], 0.0f);
 			}
 			errDist = static_cast<float> (errSum / double(PDs.size()));
 			std::cout << "Average error distance per principal direction : " << errDist << "\n";
-			PDs = cpuPDs;
+#pragma omp parallel for
+			for (size_t v = 0; v < numVertices; v++) {
+				this->PrincipalCurvatures[v] = curv1s[v];
+				this->PrincipalCurvatures[v + numVertices] = curv2s[v];
+			}
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, PDBuffer);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, PDs.size() * sizeof(glm::vec4), PDs.data(), GL_DYNAMIC_DRAW);
+
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data(), GL_DYNAMIC_DRAW);
+
 		}//end of costexpr if CPUtesting
 
 
@@ -787,11 +772,9 @@ public:
 		glDeleteBuffers(1, &vertexStorageBuffer);
 		glDeleteBuffers(1, &normalStorageBuffer);
 		glDeleteBuffers(1, &indexStorageBuffer);
-		
-		
 		*/
 	}
-	
+
 	void computeHessian() {
 
 	}
@@ -799,22 +782,22 @@ public:
 	void findAdjacentFaces() {
 		auto start = std::chrono::high_resolution_clock::now();
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
-		for (int i = 0; i < numVertices;i++) { adjacentFaces[i].fill(-1); }
-	
-		for (int i = 0; i < numIndices/3; i++) { //loop each face
-			int vertexIds[3] = { this->indices[3*i],this->indices[3*i +1] ,this->indices[3*i +2] };
+		for (int i = 0; i < numVertices; i++) { adjacentFaces[i].fill(-1); }
+		//#pragma omp parallel for
+		for (int i = 0; i < numFaces; i++) { //loop each face
+			int vertexIds[3] = { this->indices[3 * i],this->indices[3 * i + 1] ,this->indices[3 * i + 2] };
 			for (int j = 0; j < 3; j++) { //loop each vertex on the face
 				for (int k = 0; k < 10; k++) {
-					if (this->adjacentFaces[vertexIds[j]][2*k] < 0) {
+					if (this->adjacentFaces[vertexIds[j]][2 * k] < 0) {
 						this->adjacentFaces[vertexIds[j]][2 * k] = vertexIds[(j + 1) % 3];
-						this->adjacentFaces[vertexIds[j]][2 * k+1] = vertexIds[(j + 2) % 3];
+						this->adjacentFaces[vertexIds[j]][2 * k + 1] = vertexIds[(j + 2) % 3];
 						break;
 					}
 				}
 			}
 		}
 		glGenBuffers(1, &adjacentFacesBuffer);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, adjacentFacesBuffer);  
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, adjacentFacesBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, adjacentFaces.size() * sizeof(int) * 20, adjacentFaces.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
 		/*
@@ -827,7 +810,7 @@ public:
 		*/
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end - start;
-		std::cout << "Adjacent faces calculated. Took : "<< elapsed_seconds.count() <<" seconds. \n";
+		std::cout << "Adjacent faces calculated. Took : " << elapsed_seconds.count() << " seconds. \n";
 
 		//glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(GLfloat), adjacentFaces.data());
 		/*
@@ -840,11 +823,11 @@ public:
 	}
 	//Calculates pseudo-"Voronoi" area for each vertex
 	void computePointAreas() {
-		pointAreaCompute = loadComputeShader(".\\shaders\\pointAreas.compute");
-		glUseProgram(pointAreaCompute);
+		constexpr bool CPUmode = true;
+		//constexpr bool CPUmode = false;
 
 		//int for concurrency with atomicCompSwap
-		pointAreas.resize(this->numVertices,GLint{0}); //by vertex
+		pointAreas.resize(this->numVertices, GLint{0}); //by vertex
 		glGenBuffers(1, &pointAreaBuffer);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, pointAreaBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, pointAreas.size() * sizeof(GLint), pointAreas.data(), GL_DYNAMIC_DRAW);
@@ -855,6 +838,10 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, cornerAreaBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, cornerAreas.size() * sizeof(GLfloat), cornerAreas.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 31, cornerAreaBuffer);
+
+
+		pointAreaCompute = loadComputeShader(".\\shaders\\pointAreas.compute");
+		glUseProgram(pointAreaCompute);
 
 		glUniform1ui(glGetUniformLocation(pointAreaCompute, "indicesSize"), this->numIndices);
 		glUniform1ui(glGetUniformLocation(pointAreaCompute, "verticesSize"), this->numVertices);
@@ -869,23 +856,22 @@ public:
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		std::cout << "Corner Areas after compute : " << "\n";
 		for (int dbg = 0; dbg < 3; dbg++) {
-			std::cout << "cornerAreas[" << dbg<< "] " << cornerAreas[dbg] << " ,";
-			std::cout << "cornerAreas[" << cornerAreas.size() - dbg - 1 << "] "<< cornerAreas[cornerAreas.size() - dbg - 1]<<" "; 
+			std::cout << "cornerAreas[" << dbg << "] " << cornerAreas[dbg] << " ,";
+			std::cout << "cornerAreas[" << cornerAreas.size() - dbg - 1 << "] " << cornerAreas[cornerAreas.size() - dbg - 1] << " ";
 		}
 		std::cout << "\n";
 		std::cout << "Point Areas after compute : " << "\n";
 		for (int dbg = 0; dbg < 3; dbg++) {
 			std::cout << "pointAreas[" << dbg << "] " << glm::intBitsToFloat(pointAreas[dbg]) << " ,";
-			std::cout << "pointAreas[" << pointAreas.size() - dbg - 1 << "] " << glm::intBitsToFloat(pointAreas[pointAreas.size() - dbg - 1]) << " "; 
+			std::cout << "pointAreas[" << pointAreas.size() - dbg - 1 << "] " << glm::intBitsToFloat(pointAreas[pointAreas.size() - dbg - 1]) << " ";
 		}
 		std::cout << "\n";
 
 
-		constexpr bool CPUmode = true;
 		if constexpr (CPUmode == true) {
 			std::vector<float> cpuPointAreas, cpuCornerAreas;
-			cpuPointAreas.resize(numVertices, 0.0f); cpuCornerAreas.resize(numIndices,0.0f);
-
+			cpuPointAreas.resize(numVertices, 0.0f); cpuCornerAreas.resize(numIndices, 0.0f);
+#pragma omp parallel for
 			for (int id = 0; id < numFaces; id++) {
 				int faceID = 3 * id;
 				int vertexIds[3] = {
@@ -955,8 +941,12 @@ public:
 				cpuCornerAreas[faceID] = cornerAreasTmp[0];
 				cpuCornerAreas[faceID + 1] = cornerAreasTmp[1];
 				cpuCornerAreas[faceID + 2] = cornerAreasTmp[2];
+
+#pragma omp atomic
 				cpuPointAreas[vertexIds[0]] += cornerAreasTmp[0];
+#pragma omp atomic
 				cpuPointAreas[vertexIds[1]] += cornerAreasTmp[1];
+#pragma omp atomic
 				cpuPointAreas[vertexIds[2]] += cornerAreasTmp[2];
 			}
 			double errSum = 0.0;
@@ -965,25 +955,28 @@ public:
 			}
 			errSum /= cpuCornerAreas.size();
 			std::cout << "Corner areas average difference from CPU computed : " << errSum << "\n";
+			//copy back
 			cornerAreas = cpuCornerAreas;
 			for (int i = 0; i < pointAreas.size(); i++) {
 				pointAreas[i] = glm::floatBitsToInt(cpuPointAreas[i]);
 			}
+			/*
+			*/
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, pointAreaBuffer);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, pointAreas.size() * sizeof(GLint), pointAreas.data(), GL_DYNAMIC_DRAW);
 
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, cornerAreaBuffer);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, cornerAreas.size() * sizeof(GLfloat), cornerAreas.data(), GL_DYNAMIC_DRAW);
-		}
-	}
+		}//end of if cpuMode
+	}//end of pointAreas function
 	bool loadAssimp() {
 		Assimp::Importer importer;
-		
+
 		if (!this->vertices.empty()) {
 			return false; //if not empty return
 		}
-		
-		std::cout<<"\nLoading file : "<<this->path<<".\n";
+
+		std::cout << "\nLoading file : " << this->path << ".\n";
 		//aiProcess_Triangulate !!!
 		const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes /*| aiProcess_CalcTangentSpace | aiProcess_GenUVCoords*/); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
 		if (!scene) {
@@ -992,44 +985,53 @@ public:
 		}
 		std::cout << "Number of meshes : " << scene->mNumMeshes << ".\n";
 
-		// TODO : In this code we just use the 1st mesh (for now)
+		//current mesh
 		const aiMesh* mesh = scene->mMeshes[0];
-		// Fill vertices positions
-		//std::cout << "Number of vertices :" << mesh->mNumVertices << "\n";
-		for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+
+		omp_set_num_threads(getOMPMaxThreads());
+		this->vertices.resize(mesh->mNumVertices, vec3(0.0f));
+#pragma omp parallel for
+		for (size_t i = 0; i < mesh->mNumVertices; i++) {
 			aiVector3D pos = mesh->mVertices[i];
-			this->vertices.push_back(glm::vec3(pos.x, pos.y, pos.z));
+			//Can't use push_back parallely!
+			//this->vertices.push_back(glm::vec3(pos.x, pos.y, pos.z));
+			this->vertices[i] = glm::vec3(pos.x, pos.y, pos.z);
 		}
 
 		// Fill vertices texture coordinates
+		this->textureCoordinates.resize(mesh->mNumVertices, glm::vec2(0.0f));
 		if (mesh->HasTextureCoords(0)) {
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+#pragma omp parallel for
+			for (size_t i = 0; i < mesh->mNumVertices; i++) {
 				aiVector3D UVW = mesh->mTextureCoords[0][i]; // Assume only 1 set of UV coords; AssImp supports 8 UV sets.
-				this->textureCoordinates.push_back(glm::vec2(UVW.x, UVW.y));
+				this->textureCoordinates[i] = (glm::vec2(UVW.x, UVW.y));
 			}
 		}
 
 		// Fill vertices normals
+		this->normals.resize(mesh->mNumVertices, vec3(0.0f));
 		if (mesh->HasNormals()) {
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+#pragma omp parallel for
+			for (size_t i = 0; i < mesh->mNumVertices; i++) {
 				// std::cout<<"Number of Vertices : "<<mesh->mNumVertices<<"\n";
 				aiVector3D n = mesh->mNormals[i];
-				this->normals.push_back(glm::normalize(glm::vec3(n.x, n.y, n.z)));
+				this->normals[i] = glm::normalize(glm::vec3(n.x, n.y, n.z));
 			}
 		}
 		else {
-			//std::cout << "Model has no normals.\n";
+			std::cout << "Model has no normals.\n";
 			//mesh->
-			for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
-				// std::cout<<"Number of Vertices : "<<mesh->mNumVertices<<"\n";
+#pragma omp parallel for
+			for (size_t i = 0; i < mesh->mNumVertices; i++) {
 				aiVector3D n = mesh->mNormals[i];
-				this->normals.push_back(glm::normalize(glm::vec3(n.x, n.y, n.z)));
+				this->normals[i] = glm::normalize(glm::vec3(n.x, n.y, n.z));
 			}
 		}
 		// Fill face indices
-		for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
-			std::array<unsigned int, 3> fac;
-			for (unsigned int j = 0; j < mesh->mFaces[i].mNumIndices; j++) {
+//#pragma omp parallel for
+		for (size_t i = 0; i < mesh->mNumFaces; i++) {
+			std::array<unsigned int, 3> fac{ 0 };
+			for (size_t j = 0; j < mesh->mFaces[i].mNumIndices; j++) {
 				this->indices.push_back(mesh->mFaces[i].mIndices[j]);
 				fac[j] = mesh->mFaces[i].mIndices[j];
 			}
@@ -1040,7 +1042,7 @@ public:
 		std::cout << "Number of normals : " << this->normals.size() << "\n";
 		std::cout << "Number of indices : " << this->indices.size() << "\n";
 		std::cout << "Number of faces : " << this->faces.size() << "\n";
-		
+
 		this->numVertices = this->vertices.size();
 		this->numNormals = this->normals.size();
 		this->numFaces = this->faces.size();
@@ -1048,6 +1050,12 @@ public:
 
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
+	}
+	static int getOMPMaxThreads() {
+		//only runs once
+		static int maxThreads = omp_get_max_threads();
+		cout << "Max OMP threads : "<<maxThreads<<".\n";
+		return maxThreads;
 	}
 	bool exportAssimp() {
 
@@ -1075,7 +1083,7 @@ public:
 	//Nested ownership often causes leaks
 	/*
 	~Model() {
-		
+
 		glDeleteBuffers(1, &positionBuffer);
 		glDeleteBuffers(1, &normalBuffer);
 		glDeleteBuffers(1, &textureBuffer);
@@ -1093,7 +1101,7 @@ public:
 		glDeleteBuffers(1, &cornerAreaBuffer);
 	}
 	*/
-	void rotCoordSys(vec3 old_u, vec3 old_v,vec3 new_norm,vec3 &new_u, vec3& new_v)
+	void rotateCoordSys(vec3 old_u, vec3 old_v, vec3 new_norm, vec3& new_u, vec3& new_v)
 	{
 		new_u = old_u;
 		new_v = old_v;

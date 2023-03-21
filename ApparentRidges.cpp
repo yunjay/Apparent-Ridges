@@ -105,27 +105,25 @@ int main()
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 430");
+    ImGui_ImplOpenGL3_Init("#version 460");
 
     //Load Models
     std::vector<Model> models;
     //order causes no bugs
+
+    /*
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
     models.push_back(Model(".\\models\\max-planck.obj"));
-
-    //models.push_back(Model(".\\models\\Victory.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
     models.push_back(Model(".\\models\\brain.obj"));
     models.push_back(Model(".\\models\\Nefertiti.obj"));
     models.push_back(Model(".\\models\\cow.obj"));
-    /*
     models.push_back(Model(".\\models\\Zagato.obj"));
     */
-    /*
-    models.push_back(Model(".\\models\\column.obj"));
-    //models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
-    */
+   
+    models.push_back(Model(".\\models\\torus.obj"));
+    //models.push_back(Model(".\\models\\column.obj"));
 
     Model* currentModel = &models[0];
 
@@ -194,7 +192,7 @@ int main()
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 3.0f);
-        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.2f);
+        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.3f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
         ImGui::ColorEdit3("Background Color", (float*)&background, misc_flags);
