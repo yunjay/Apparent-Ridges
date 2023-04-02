@@ -1,6 +1,7 @@
 #version 460
 //
 layout(local_size_x = 1024, local_size_y = 1, local_size_z = 1) in;
+//layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 layout(binding = 7, std430)  buffer PDBuffer{
     vec4 PDs[];
 };
@@ -20,32 +21,52 @@ layout(binding = 11, std430) readonly buffer indexBuffer{
 layout(binding = 20, std430) readonly buffer adjacentFacesBuffer{
     int adjFaces[][20];
 };
-layout(binding = 21, std430) buffer q1Buffer{
+layout(binding = 21, std430) coherent buffer q1Buffer{
     float q1s[];
 };
-layout(binding = 22, std430) buffer t1Buffer{
+layout(binding = 22, std430) coherent buffer t1Buffer{
     vec2 t1s[];
 };
 layout(binding = 23, std430) buffer Dt1q1Buffer{
     float Dt1q1s[];
 };
-uniform vec3 viewPosition;
+layout(binding=42, std430) buffer DumpBuffer{
+    float dump[];
+};
+const float epsilon = 1e-5;
+const float MAX_FLOAT = 3.402823466e+38;
+const float SMALLEST_FLOAT = 1.175494351e-38;
 
+uniform vec3 viewPosition;
+uniform mat4 model;
 uniform uint verticesSize;
 void main(){
     uint id = gl_GlobalInvocationID.x; //starts with 0
-    if(id>=verticesSize) return; 
+    if(id>=verticesSize) return;  //by vertex
 
     vec3 position = vertices[id].xyz;
+    //MODEL SPACE TRASFORMATION
+    position = vec3(model*vec4(position,1.0));
     vec3 normal = normals[id].xyz;
-    vec3 viewDir = normalize(viewPosition - position);
-    vec3 maxPD = PDs[id].xyz;
-    vec3 minPD = PDs[id+verticesSize].xyz;
+    //vec3(mat4()) includes translations while mat3(model) does not, only rotations and scales.
+    normal = normalize(mat3(transpose(inverse(model))) * normal);
+
+    //vec3 maxPD = PDs[id].xyz;
+    //vec3 minPD = PDs[id+verticesSize].xyz;
+    //vec3 maxPD = normalize(vec3(model*PDs[id]));
+    //vec3 minPD = normalize(vec3(model*PDs[id+verticesSize
+    vec3 maxPD = normalize(transpose(inverse(mat3(model))) *vec3(PDs[id]));
+    vec3 minPD = normalize(transpose(inverse(mat3(model))) * vec3(PDs[id + verticesSize]));
+
+    
     float maxCurv = curvatures[id];
     float minCurv = curvatures[id+verticesSize];
 
+    vec3 viewDir = normalize(viewPosition - position);
+
+    //float normalDotView = dot(viewDir,normal);
     float normalDotView = dot(viewDir,normal);
-     //basis with principal directions projected to viewDirection
+    //basis with principal directions projected to viewDirection
     float u = dot(viewDir,maxPD);
     float v = dot(viewDir,minPD);
     float u2 = u*u;
@@ -54,17 +75,23 @@ void main(){
     float csc2 = 1.0/(u2+v2);
 
     //Q is the view dependent curvature tensor
+    //S is the curvature operator (shape operator)
     //Q = SPbar^(-1)
     //maxCurv and minCurv are eigenvalues of S
-    float sec_min1 = 1.0/abs(normalDotView) - 1.0;
+    // sec = 1/cos
+    //Q = S * P^-1
+    //  = S + (sec theta - 1) * S * w * w^T
+    if(abs(normalDotView)<=epsilon) normalDotView = epsilon;
+    
+    float sec_min1 = 1.0 / abs(normalDotView) - 1.0;
     float Q11 = maxCurv * (1.0 + sec_min1 * u2*csc2);
     float Q12 = maxCurv * (      sec_min1 * uv*csc2);
     float Q21 = minCurv * (      sec_min1 * uv*csc2);
     float Q22 = minCurv * (1.0 + sec_min1 * v2*csc2);
 
     //Max singular value = max view-dependent curvature, direction
-    //Can't use eigens... why exactly?
-    //so we use Q^TQ (Symmetric matrix)
+    //Can't use eigens bc it maps 3->2 dimension.
+    //so we use Q^TQ (Symmetric matrix) for singular values
     float QTQ1  = Q11 * Q11 + Q21 * Q21;
     float QTQ12 = Q11 * Q12 + Q21 * Q22;
     float QTQ2  = Q12 * Q12 + Q22 * Q22;
@@ -73,12 +100,24 @@ void main(){
     //q1 : max view-dep curvature, t1 = max view-dep curvature direction
     float q1 = 0.5 * (QTQ1 + QTQ2);
     if(q1 > 0.0)
-        q1 += sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
+        q1 += sqrt(abs(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1)));
     else
-        q1 -= sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
+        q1 -= sqrt(abs(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1)));
     
-    vec2 t1 = normalize(vec2(QTQ2-q1,-QTQ12));
 
+    vec2 t1 = vec2(QTQ2-q1,-QTQ12);
+    if(length(t1)<epsilon)t1=vec2(epsilon,epsilon);
+    t1=normalize(t1);
+    
+    if(abs(q1)> MAX_FLOAT/ 64.0) q1 = MAX_FLOAT/ 64.0 * sign(q1);
+    if(abs(q1)< SMALLEST_FLOAT* 64.0) q1 = SMALLEST_FLOAT* 64.0 * sign(q1);
     q1s[id] = q1;
+    
     t1s[id] = t1;
+    
+/*
+    dump[id] = viewPosition.z; //no issues
+    if(id%2==0) dump[id]=model[0][0]; //no issues
+*/
+    
 }

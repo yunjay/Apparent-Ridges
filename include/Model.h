@@ -18,6 +18,7 @@
 
 #include "LoadShader.h"
 using glm::vec3; using glm::vec4;
+using glm::dot; using glm::cross; using glm::normalize; using glm::sign;
 const unsigned int workGroupSize = 1024;
 bool loadAssimp(const char* path, std::vector<glm::vec3>& out_vertices, std::vector<glm::vec3>& out_normals, std::vector<unsigned int>& out_indices);
 void printVec(glm::vec3 v) {
@@ -33,15 +34,16 @@ public:
 	//Buffers
 	GLuint VAO, positionBuffer, normalBuffer, textureBuffer, EBO;
 	GLuint PDBuffer, CurvatureBuffer;
-	GLuint maxPDVBO, maxCurvVBO, minPDVBO, minCurvVBO;
+	GLuint maxPDVBO, maxCurvVBO, minPDVBO, minCurvVBO, curvColorVBO, worldt1VBO;
 	GLuint vertexStorageBuffer, normalStorageBuffer, indexStorageBuffer;
 	//q1 : max view-dep curvature, t1 : max view-dep curvature direction
 	//Dt1q1 : max view-dependent curvature's directional derivative in direction t1
-	//TODO : These should be static
 	GLuint adjacentFacesBuffer, q1Buffer, t1Buffer, Dt1q1Buffer;
 	GLuint pointAreaBuffer, cornerAreaBuffer;
+	GLuint dumpBuffer;
 
 	//shaders
+	//TODO : These should be static
 	GLuint viewDepCurvatureCompute, Dt1q1Compute, pointAreaCompute;
 
 	std::vector<glm::vec3> vertices;
@@ -56,7 +58,8 @@ public:
 	std::vector<GLfloat> PrincipalCurvatures;
 	std::vector<std::array<int, 20>> adjacentFaces; //10 pairs of indices of adjacent edges to the vertex
 	std::vector<GLint> pointAreas; //for every vertex 
-	std::vector<GLfloat> cornerAreas; //for every index 
+	std::vector<GLfloat> cornerAreas; //for every index
+	std::vector<glm::vec3> curvColors;
 
 	std::vector<glm::vec4> maxPDs;
 	std::vector<glm::vec4> minPDs;
@@ -66,6 +69,8 @@ public:
 	std::vector<float> q1s;
 	std::vector<glm::vec2> t1s;
 	std::vector<float> Dt1q1s;
+	std::vector<vec3> worldt1s;
+
 
 	unsigned int numVertices;
 	unsigned int numNormals;
@@ -81,10 +86,13 @@ public:
 	bool isSet = false;
 	bool curvaturesCalculated = false;
 	bool apparentRidges = false;
-	bool printed = false;
 
 	//Debugging area
 	glm::mat4 modelMatrix;
+	glm::vec3 viewPos;
+	std::vector<float> dumps;
+	bool printed = false;
+	bool dumped = false;
 
 	Model(std::string path) {
 		this->path = path;
@@ -143,6 +151,7 @@ public:
 			glGenBuffers(1, &minPDVBO); //4
 			glGenBuffers(1, &maxCurvVBO); //5
 			glGenBuffers(1, &minCurvVBO); //6
+			glGenBuffers(1, &curvColorVBO); //7
 
 			//Get data from SSBOs
 			//void glGetNamedBufferSubData(	GLuint buffer,GLintptr offset,GLsizeiptr size,void *data);
@@ -175,9 +184,19 @@ public:
 			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), &PrincipalCurvatures[this->vertices.size()], GL_STATIC_DRAW);
 			glEnableVertexAttribArray(6);
 			glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
+			
+			this->computeCurvColors();
+			glBindBuffer(GL_ARRAY_BUFFER, curvColorVBO);
+			glBufferData(GL_ARRAY_BUFFER, curvColors.size() * sizeof(glm::vec3), curvColors.data(), GL_STATIC_DRAW);
+			glEnableVertexAttribArray(7);
+			glVertexAttribPointer(7, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 			//glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), &vertices[0], GL_STATIC_DRAW);
+
+			glBindBuffer(GL_ARRAY_BUFFER, minCurvVBO);
+			glBufferData(GL_ARRAY_BUFFER, PrincipalCurvatures.size() / 2 * sizeof(GLfloat), &PrincipalCurvatures[this->vertices.size()], GL_STATIC_DRAW);
+			glEnableVertexAttribArray(6);
+			glVertexAttribPointer(6, 1, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
 		}
 		else { this->computeCurvatures(); this->setup(); }
@@ -215,11 +234,19 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
+		//for debugging
+		dumps.resize(this->numVertices, 0.0f);
+		glGenBuffers(1, &dumpBuffer);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, dumpBuffer);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, dumps.size() * sizeof(GLfloat), q1s.data(), GL_DYNAMIC_DRAW);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 42, dumpBuffer);
+		
+		
 		glBindVertexArray(0);
 
 		//shaders for apparent ridges
-		this->viewDepCurvatureCompute = loadComputeShader(".\\shaders\\viewDepCurv.compute");
-		this->Dt1q1Compute = loadComputeShader(".\\shaders\\Dt1q1.compute");
+		this->viewDepCurvatureCompute = loadComputeShader(".\\shaders\\viewDepCurv.comp");
+		this->Dt1q1Compute = loadComputeShader(".\\shaders\\Dt1q1.comp");
 
 		//std::cout << "Ready to render.\n";
 		this->isSet = true;
@@ -232,12 +259,14 @@ public:
 		if (!isSet) { this->setup(); }
 
 		if (this->apparentRidges) {
+			constexpr bool CPUmode = false;
+			//constexpr bool CPUmode = true;
 			//Rebind SSBOs
 			this->rebindSSBOs();
-
+			/*
 			if (!printed) {
-				std::cout << "For model " << this->path << " : \n";
-				std::cout << "Before View dep computation " << this->path << " : \n";
+				std::cout << "\nFor model " << this->path << " : \n";
+				std::cout << "Before View dep computation on " << this->path << " : \n";
 				glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(GLfloat), PDs.data());
 				std::cout << "PDs : ";
 				for (int dbg = 0; dbg < 2; dbg++) {
@@ -271,48 +300,65 @@ public:
 				}
 				std::cout << "\n";
 			}
+			*/
 
 			glBindVertexArray(VAO);
+			this->rebindSSBOs();
 			//Compute View-dep curvatures (q1), and direction (t1)
+			if (!CPUmode) {
+
 			glUseProgram(viewDepCurvatureCompute);
 			glUniform1ui(glGetUniformLocation(viewDepCurvatureCompute, "verticesSize"), this->numVertices);
 
 			glUniformMatrix4fv(glGetUniformLocation(viewDepCurvatureCompute, "model"), 1, GL_FALSE, &this->modelMatrix[0][0]);
+			glUniform3f(glGetUniformLocation(viewDepCurvatureCompute, "viewPosition"), viewPos.x, viewPos.y, viewPos.z);
 
 			glDispatchCompute(glm::ceil(GLfloat(this->numVertices) / float(workGroupSize)), 1, 1);
 			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 			if (!printed) {
-				std::cout << "After view dep curvature " << " : \n";
+				const int maxdbg = 10;
+				std::cout << "\nFor model " << this->path << " : \n";
+				std::cout << "After ViewDepCurvature " << " : \n";
 				glGetNamedBufferSubData(this->q1Buffer, 0, q1s.size() * sizeof(GLfloat), q1s.data());
 				std::cout << "q1s : ";
-				for (int dbg = 0; dbg < 4; dbg++) {
+				for (int dbg = 0; dbg < maxdbg; dbg++) {
 					std::cout << q1s[dbg] << ", ";
 				}
 				std::cout << "\n";
 				glGetNamedBufferSubData(t1Buffer, 0, t1s.size() * sizeof(GLfloat), t1s.data());
 				std::cout << "t1s : ";
-				for (int dbg = 0; dbg < 4; dbg++) {
+				for (int dbg = 0; dbg < maxdbg; dbg++) {
 					std::cout << "(" << t1s[dbg].x << "," << t1s[dbg].y << "), ";
 				}
 				std::cout << "\n";
 				glGetNamedBufferSubData(Dt1q1Buffer, 0, Dt1q1s.size() * sizeof(GLfloat), Dt1q1s.data());
 				std::cout << "Dt1q1s : ";
-				for (int dbg = 0; dbg < 4; dbg++) {
+				for (int dbg = 0; dbg < maxdbg; dbg++) {
 					std::cout << Dt1q1s[dbg] << ", ";
 				}
 				std::cout << "\n";
+				glGetNamedBufferSubData(dumpBuffer, 0, dumps.size() * sizeof(GLfloat), dumps.data());
+				/*
+				std::cout << "Dump : ";
+				for (int dbg = 0; dbg < maxdbg; dbg++) {
+					std::cout << dumps[dbg] << ", ";
+				}
+				std::cout << "\n";
+				*/
 			}
 
 			//Compute View-dep curvature derivatives (Dt1q1)
 			glUseProgram(Dt1q1Compute);
 			glUniform1ui(glGetUniformLocation(Dt1q1Compute, "verticesSize"), this->numVertices);
 			glUniformMatrix4fv(glGetUniformLocation(Dt1q1Compute, "model"), 1, GL_FALSE, &this->modelMatrix[0][0]);
+			glUniform3f(glGetUniformLocation(Dt1q1Compute, "viewPosition"), viewPos.x, viewPos.y, viewPos.z);
+
 			glDispatchCompute(glm::ceil(GLfloat(this->numVertices) / float(workGroupSize)), 1, 1);
 			glMemoryBarrier(GL_ALL_BARRIER_BITS);
 
 			if (!printed) {
-				const int maxdbg = 10;
+				const int maxdbg = 20;
 				std::cout << "After Dt1q1 " << " : \n";
 				glGetNamedBufferSubData(this->q1Buffer, 0, q1s.size() * sizeof(GLfloat), q1s.data());
 				std::cout << "q1s : ";
@@ -333,8 +379,108 @@ public:
 				}
 				std::cout << "\n";
 				printed = true;
-			}
 
+				glGetNamedBufferSubData(dumpBuffer, 0, dumps.size() * sizeof(GLfloat), dumps.data());
+				std::cout << "Dump : ";
+				for (int dbg = 0; dbg < maxdbg; dbg++) {
+					std::cout << dumps[dbg] << ", ";
+				}
+				std::cout << "\n";
+			}
+			}
+			if (CPUmode) {
+				q1s.resize(numVertices, 0.0f);
+				t1s.resize(numVertices, glm::vec2(0.0f));
+#pragma omp parallel for
+				for (size_t i=0; i < numVertices; i++) {
+					vec3 position = vec3(modelMatrix * vec4(vertices[i], 1.0f));
+					vec3 viewDir = normalize(viewPos - position);
+					vec3 normal = normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * normals[i]);
+
+					vec3 maxPD = normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * vec3(PDs[i]));
+					vec3 minPD = normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * vec3(PDs[i + numVertices]));
+					float maxCurv = PrincipalCurvatures[i];
+					float minCurv = PrincipalCurvatures[i + numVertices];
+					float normalDotView = glm::dot(viewDir, normal);
+					float u = dot(viewDir, maxPD);
+					float v = dot(viewDir, minPD);
+					float u2 = u * u;
+					float v2 = v * v;
+					float uv = u * v;
+					float csc2 = 1.0f / (u2 + v2);
+					float sec_min1 = 1.0f / glm::abs(normalDotView) - 1.0f;
+					float Q11 = maxCurv * (1.0f + sec_min1 * u2 * csc2);
+					float Q12 = maxCurv * (sec_min1 * uv * csc2);
+					float Q21 = minCurv * (sec_min1 * uv * csc2);
+					float Q22 = minCurv * (1.0f + sec_min1 * v2 * csc2);
+					float QTQ1 = Q11 * Q11 + Q21 * Q21;
+					float QTQ12 = Q11 * Q12 + Q21 * Q22;
+					float QTQ2 = Q12 * Q12 + Q22 * Q22;
+					float q1 = 0.5 * (QTQ1 + QTQ2);
+					if (q1 > 0.0)
+						q1 += sqrt(abs(QTQ12 * QTQ12 + 0.25 * (QTQ2 - QTQ1) * (QTQ2 - QTQ1)));
+					else
+						q1 -= sqrt(abs(QTQ12 * QTQ12 + 0.25 * (QTQ2 - QTQ1) * (QTQ2 - QTQ1)));
+					glm::vec2 t1 = glm::vec2(QTQ2 - q1, -QTQ12);
+					t1 = normalize(t1);
+					q1s[i] = q1;
+					t1s[i] = t1;
+					//Dt1q1
+					float ndotv = dot(viewDir, normal);
+					vec3 world_t1 = t1[0] * maxPD + t1[1] * minPD;
+					vec3 world_t2 = normalize(cross(normal, world_t1));
+
+					float v0_dot_t2 = dot(position, world_t2);
+					float Dt1q1 = 0.0;
+					int n = 0;
+					for (int j = 0; j < 10; j++) {
+						int v1id = adjacentFaces[i][2 * j];
+						int v2id = adjacentFaces[i][2 * j + 1];
+						if (v1id < 0 || v2id < 0) break;
+						vec3 v1 = vec3(modelMatrix * vec4(vertices[v1id], 1.0));
+						vec3 v2 = vec3(modelMatrix * vec4(vertices[v2id], 1.0));
+
+						//find point p between v1 and v2 by linear interpolation
+						//v0 is along t1, perp to t2
+						// p = w1*v1 + w2*v2, where w2 = 1-w1
+						float v1_dot_t2 = dot(v1, world_t2);
+						float v2_dot_t2 = dot(v2, world_t2);
+						float w1;
+						if (abs(v2_dot_t2 - v1_dot_t2) > 1e-6) {
+							w1 = (v2_dot_t2 - v0_dot_t2) / (v2_dot_t2 - v1_dot_t2);
+						}
+						else {
+							w1 = (v2_dot_t2 - v0_dot_t2) / 1e-6;
+						}
+						if (w1 < 0.0 || w1 >= 1.0) continue;
+						float w2 = 1.0 - w1;
+						vec3 p = w1 * v1 + w2 * v2;
+						float interpViewDepCurv = w1 * q1s[v1id] + w2 * q1s[v2id];
+						float projDistance = dot((p - position), world_t1);
+						projDistance *= abs(normalDotView);
+						
+						Dt1q1 += (interpViewDepCurv - q1) / projDistance;
+						n++;
+						
+
+					}
+					if (n != 0) Dt1q1 /= float(n);
+					/*
+					const float MAX_FLOAT = 3.402823466e+38;
+					const float SMALLEST_FLOAT = 1.175494351e-38;
+					if (abs(Dt1q1) > MAX_FLOAT / 64.0) Dt1q1 = MAX_FLOAT / 64.0 * sign(Dt1q1);
+					if (abs(Dt1q1) < SMALLEST_FLOAT * 64.0) Dt1q1 = SMALLEST_FLOAT * 64.0 * sign(Dt1q1);
+					*/
+					Dt1q1s[i] = Dt1q1;
+				}
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, q1Buffer);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, q1s.size() * sizeof(GLfloat), q1s.data(), GL_DYNAMIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, t1Buffer);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, t1s.size() * sizeof(glm::vec2), t1s.data(), GL_DYNAMIC_DRAW);
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, Dt1q1Buffer);
+				glBufferData(GL_SHADER_STORAGE_BUFFER, Dt1q1s.size() * sizeof(GLfloat), Dt1q1s.data(), GL_DYNAMIC_DRAW);
+
+			}
 		}
 		glBindVertexArray(VAO);
 		glUseProgram(shader);
@@ -342,7 +488,20 @@ public:
 		//glDrawElements(GL_LINES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
 
 		glDrawElements(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0);
-
+		
+		/*
+		dumped = false;
+		if (!dumped) {
+            glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+			glGetNamedBufferSubData(dumpBuffer, 0, dumps.size() * sizeof(GLfloat), dumps.data());
+			std::cout << "AppRidges Dump: ";
+			for (int dbg = 0; dbg < 10; dbg++) {
+				std::cout << dumps[dbg] << ", ";
+			}
+			std::cout << "\n";
+			dumped = true;
+		}
+		*/
 		//glDisableVertexAttribArray(0);
 		//glDisableVertexAttribArray(1);
 		//glBindVertexArray(0);
@@ -381,19 +540,8 @@ public:
 		//generate ssbos to use in compute shader
 		//we need to calculate 2 principal directions and 2 principal curvatures per vertex.
 		//NOTE : SSBOs do not work well with vec3s. They take them as vec4 anyway or sth. Use vec4.
-		auto start = std::chrono::high_resolution_clock::now();
-
-		//constexpr bool isCPUMode = false;
 		constexpr bool isCPUMode = true;
-
-		//So we need to initially compute by face.
-		//Load compute shader
-		GLuint perFace = loadComputeShader(".\\shaders\\curvature_perFace.compute");
-		GLuint perVertex = loadComputeShader(".\\shaders\\curvature_perVertex.compute");
-
-		//resize vertices for curvature values resize(num,value)
-		PDs.resize(vertices.size() * 2, glm::vec4(0.0));
-		PrincipalCurvatures.resize(vertices.size() * 2, 0.0f);
+		//constexpr bool isCPUMode = false;
 
 		// setup SSBOs
 		//  &[0] -> .data() 
@@ -434,6 +582,20 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, indexStorageBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 11, indexStorageBuffer);
+
+		PDs.resize(vertices.size() * 2, glm::vec4(0.0));
+		PrincipalCurvatures.resize(vertices.size() * 2, 0.0f);
+		if (!isCPUMode) {
+
+		auto start = std::chrono::high_resolution_clock::now();
+
+
+		//So we need to initially compute by face.
+		//Load compute shader
+		GLuint perFace = loadComputeShader(".\\shaders\\curvature_perFace.compute");
+		GLuint perVertex = loadComputeShader(".\\shaders\\curvature_perVertex.compute");
+
+		//resize vertices for curvature values resize(num,value)
 
 		//Curvature tensor elements for mid use
 		/*
@@ -535,8 +697,10 @@ public:
 		glGetNamedBufferSubData(PDBuffer, 0, PDs.size() * sizeof(glm::vec4), PDs.data());
 		glGetNamedBufferSubData(CurvatureBuffer, 0, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data());
 
-		if constexpr (isCPUMode) {
-			start = std::chrono::high_resolution_clock::now();
+		}
+		else if constexpr (isCPUMode) {
+			this->computePointAreas();
+			auto start = std::chrono::high_resolution_clock::now();
 			std::vector<float> curv1s, curv2s, curv12s;
 			std::vector<vec3> pd1, pd2;
 			curv1s.resize(this->numVertices, 0.0f); curv2s.resize(this->numVertices, 0.0f); curv12s.resize(this->numVertices, 0.0f);
@@ -733,26 +897,28 @@ public:
 
 			}//end of for loop per vertex
 
-			end = std::chrono::high_resolution_clock::now();
-			elapsed_seconds = end - start;
+			auto end = std::chrono::high_resolution_clock::now();
+			std::chrono::duration<double> elapsed_seconds = end - start;
 			std::cout << "Curvatures for " << this->path << " calculated on CPU. Took " << elapsed_seconds.count() << " seconds.\n";
 			//calculate error
 			float errDist = 0.0f;
 			double errSum = 0.0;
 			//OpenMP reduction, takes partial sums and adds them at the end of the loop (Thus no overhead compared to atomic operations.)
 			//OMP just handles savign the partial sum data and freeing it for us.
+			
+			
 #pragma omp parallel for reduction(+:errSum)
 			for (size_t v = 0; v < pd1.size(); v++) {
-				errSum += glm::distance(pd1[v], vec3(PDs[v]));
+				//errSum += glm::distance(pd1[v], vec3(PDs[v]));
 				PDs[v] = vec4(pd1[v], 0.0f);
 			}
 #pragma omp parallel for reduction(+:errSum)
 			for (size_t v = 0; v < pd2.size(); v++) {
-				errSum += glm::distance(pd2[v], vec3(PDs[v + numVertices]));
+				//errSum += glm::distance(pd2[v], vec3(PDs[v + numVertices]));
 				PDs[v + numVertices] = vec4(pd2[v], 0.0f);
 			}
-			errDist = static_cast<float> (errSum / double(PDs.size()));
-			std::cout << "Average error distance per principal direction : " << errDist << "\n";
+			//errDist = static_cast<float> (errSum / double(PDs.size()));
+			//std::cout << "Average error distance per principal direction : " << errDist << "\n";
 #pragma omp parallel for
 			for (size_t v = 0; v < numVertices; v++) {
 				this->PrincipalCurvatures[v] = curv1s[v];
@@ -764,6 +930,7 @@ public:
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, CurvatureBuffer);
 			glBufferData(GL_SHADER_STORAGE_BUFFER, PrincipalCurvatures.size() * sizeof(GLfloat), PrincipalCurvatures.data(), GL_DYNAMIC_DRAW);
 
+			this->curvaturesCalculated = true;
 		}//end of costexpr if CPUtesting
 
 
@@ -775,19 +942,16 @@ public:
 		*/
 	}
 
-	void computeHessian() {
-
-	}
 	//Finds adjacent vertices for each vertex
 	void findAdjacentFaces() {
 		auto start = std::chrono::high_resolution_clock::now();
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
-		for (int i = 0; i < numVertices; i++) { adjacentFaces[i].fill(-1); }
+		for (size_t i = 0; i < numVertices; i++) { adjacentFaces[i].fill(-1); }
 		//#pragma omp parallel for
-		for (int i = 0; i < numFaces; i++) { //loop each face
+		for (size_t i = 0; i < numFaces; i++) { //loop each face
 			int vertexIds[3] = { this->indices[3 * i],this->indices[3 * i + 1] ,this->indices[3 * i + 2] };
-			for (int j = 0; j < 3; j++) { //loop each vertex on the face
-				for (int k = 0; k < 10; k++) {
+			for (size_t j = 0; j < 3; j++) { //loop each vertex on the face
+				for (size_t k = 0; k < 10; k++) {
 					if (this->adjacentFaces[vertexIds[j]][2 * k] < 0) {
 						this->adjacentFaces[vertexIds[j]][2 * k] = vertexIds[(j + 1) % 3];
 						this->adjacentFaces[vertexIds[j]][2 * k + 1] = vertexIds[(j + 2) % 3];
@@ -802,7 +966,7 @@ public:
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
 		/*
 		//Computing this on the cpu is rather slow so I made a shader for it.
-		GLuint adjacentFacesCompute = loadComputeShader(".\\shaders\\adjacentFaces.compute");
+		GLuint adjacentFacesCompute = loadComputeShader(".\\shaders\\adjacentFaces.comp");
 		glUseProgram(adjacentFacesCompute);
 		glUniform1ui(glGetUniformLocation(adjacentFacesCompute, "indicesSize"), this->numIndices);
 		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / float(workGroupSize)), 1, 1); //per face
@@ -969,6 +1133,65 @@ public:
 			glBufferData(GL_SHADER_STORAGE_BUFFER, cornerAreas.size() * sizeof(GLfloat), cornerAreas.data(), GL_DYNAMIC_DRAW);
 		}//end of if cpuMode
 	}//end of pointAreas function
+	void computeCurvColors() {
+		curvColors.resize(numVertices, vec3(0.0f));
+		if (!curvaturesCalculated) computeCurvatures();
+		vec3 highColor = vec3(0.7f, 0.2f, 0.0f);
+		vec3 lowColor = vec3(0.0f, 0.2f, 0.7f);
+		float maxGaussian = -FLT_MAX;
+		float minGaussian = FLT_MAX;
+		float maxMean = -FLT_MAX;
+		float minMean = FLT_MAX;
+		std::vector<float> meanCurvatures; meanCurvatures.resize(numVertices);
+		std::vector<float> gaussianCurvatures; gaussianCurvatures.resize(numVertices);
+#pragma omp parallel for
+		for (size_t i = 0; i < numVertices; i++) {
+			meanCurvatures[i] = 0.5f * (PrincipalCurvatures[i] + PrincipalCurvatures[i + numVertices]);
+			gaussianCurvatures[i] = PrincipalCurvatures[i] * PrincipalCurvatures[i + numVertices];
+		}
+		float scale = (8.0f * this->minDistance)* (8.0f * this->minDistance);
+#pragma omp parallel for
+		for (size_t i = 0; i < numVertices; i++) {
+			float mc = meanCurvatures[i];
+			float gc = gaussianCurvatures[i];
+			float hue = 4.0f / 3.0f * glm::abs(glm::atan(mc * mc - gc, mc * mc * glm::sign(mc)));
+			float saturation = 2.0f*glm::one_over_pi<float>() * glm::atan((2.0f * mc * mc - gc) * scale);
+			curvColors[i] = hsv2rgb(hue,saturation,1.0f);
+		}
+	}
+	vec3 hsv2rgb(float h,float s,float v) {
+		//Converts HSV to RGB
+		//Hue is in degrees
+		//Saturation and value are in the range 0-1
+		//Returns a vec3 with the RGB values
+		float r, g, b;
+		if (s == 0.0f) {
+			r = g = b = v;
+		}
+		else {
+			float h2 = h / 60.0f;
+			int i = (int)glm::floor(h2);
+			float f = h2 - i;
+			float p = v * (1.0f - s);
+			float q = v * (1.0f - s * f);
+			float t = v * (1.0f - s * (1.0f - f));
+			switch (i) {
+			case 0:
+				r = v; g = t; b = p; break;
+			case 1:
+				r = q; g = v; b = p; break;
+			case 2:
+				r = p; g = v; b = t; break;
+			case 3:
+				r = p; g = q; b = v; break;
+			case 4:
+				r = t; g = p; b = v; break;
+			case 5:
+				r = v; g = p; b = q; break;
+			}
+		}
+		return vec3(r, g, b);
+	}
 	bool loadAssimp() {
 		Assimp::Importer importer;
 
@@ -1048,6 +1271,20 @@ public:
 		this->numFaces = this->faces.size();
 		this->numIndices = this->indices.size();
 
+		//Scale model for regular sizing
+		while (this->getMinDistance() < 0.1f) {
+#pragma omp parallel for
+			for (size_t i = 0; i < this->vertices.size(); i++) {
+				this->vertices[i] *= 10.0f;
+			}
+		}
+		while (this->getMinDistance() > 10.0f) {
+#pragma omp parallel for
+			for (size_t i = 0; i < this->vertices.size(); i++) {
+				this->vertices[i] *= 0.1f;
+			}
+		}
+
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
 	}
@@ -1056,9 +1293,6 @@ public:
 		static int maxThreads = omp_get_max_threads();
 		cout << "Max OMP threads : "<<maxThreads<<".\n";
 		return maxThreads;
-	}
-	bool exportAssimp() {
-
 	}
 	bool rebindSSBOs() {
 
@@ -1074,6 +1308,7 @@ public:
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 23, Dt1q1Buffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 30, pointAreaBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 31, cornerAreaBuffer);
+		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 42, dumpBuffer);
 		return true;
 	}
 

@@ -36,8 +36,8 @@ float PDLengthScale = 0.1f;
 glm::vec3 background(30.0 / 255, 30.0 / 255, 30.0 / 255);
 glm::vec3 lineColor(1.0f);
 
-bool ridgesOn = true;
 bool PDsOn = false;
+bool viewDepPDOn = false;
 bool drawFaded = true;
 bool apparentCullFaces = false;
 bool transparent = false;
@@ -53,6 +53,7 @@ int main()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
 #ifdef __APPLE__
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
@@ -88,17 +89,20 @@ int main()
     //z buffer
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
+    /*
     glEnable(GL_CULL_FACE);
     glCullFace(GL_BACK);
+    */
 
-    //This is DEPRECATED and does NOTHING!
     /*
     */
+    //This is DEPRECATED and does NOTHING!
     glEnable(GL_BLEND); //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_LINE_SMOOTH);
-    glEnable(GL_POLYGON_SMOOTH);
     glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+    glEnable(GL_POLYGON_SMOOTH);
     glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
+
     //IMGui init    
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -107,12 +111,18 @@ int main()
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 460");
 
+    /*
+    glEnable(GL_MULTISAMPLE);
+    */
+
+
     //Load Models
     std::vector<Model> models;
     //order causes no bugs
 
-    /*
+    //models.push_back(Model(".\\models\\quadDavid.obj"));
     models.push_back(Model(".\\models\\stanford-bunny.obj"));
+    /*
     models.push_back(Model(".\\models\\max-planck.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
     models.push_back(Model(".\\models\\rapid.obj"));
@@ -123,17 +133,20 @@ int main()
     */
    
     models.push_back(Model(".\\models\\torus.obj"));
-    //models.push_back(Model(".\\models\\column.obj"));
+    models.push_back(Model(".\\models\\knot.obj"));
+    models.push_back(Model(".\\models\\horse.obj"));
 
     Model* currentModel = &models[0];
 
     //Load Shaders
-    GLuint diffuse = loadShader(".\\shaders\\diffuse.vs", ".\\shaders\\diffuse.fs");
-    GLuint base = loadShader(".\\shaders\\base.vs", ".\\shaders\\base.fs");
-    GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vs", ".\\shaders\\apparentRidges.fs",".\\shaders\\apparentRidges.gs");
+    GLuint diffuse = loadShader(".\\shaders\\diffuse.vert", ".\\shaders\\diffuse.frag");
+    GLuint base = loadShader(".\\shaders\\base.vert", ".\\shaders\\base.frag");
+    GLuint apparentRidges = loadShader(".\\shaders\\apparentRidges.vert", ".\\shaders\\apparentRidges.frag",".\\shaders\\apparentRidges.geom");
     //GLuint apparentRidges = diffuse;
-    GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vs",".\\shaders\\PDmax.fs",".\\shaders\\PDmax.gs");
-    GLuint minPDShader = loadShader(".\\shaders\\PDmin.vs",".\\shaders\\PDmin.fs",".\\shaders\\PDmin.gs");
+    GLuint maxPDShader = loadShader(".\\shaders\\PDmax.vert",".\\shaders\\PDmax.frag",".\\shaders\\PDmax.geom");
+    GLuint minPDShader = loadShader(".\\shaders\\PDmin.vert",".\\shaders\\PDmin.frag",".\\shaders\\PDmin.geom");
+    GLuint curvHeat = loadShader(".\\shaders\\curvatureHeat.vert", ".\\shaders\\curvatureHeat.frag");
+    GLuint visualizeViewDep = loadShader(".\\shaders\\visualizeViewDep.vert", ".\\shaders\\visualizeViewDep.frag", ".\\shaders\\visualizeViewDep.geom");
 
 
 
@@ -151,7 +164,7 @@ int main()
     glm::vec3 lightSpecular = glm::vec3(1, 1, 1);
 
 
-
+    int renderModeSelect = 0;
     //render loop
     while (!glfwWindowShouldClose(window))
     {
@@ -175,14 +188,19 @@ int main()
         //IMGui window
         ImGui::Begin("Apparent Ridges");
 
-        ImGui::Checkbox("Line Drawing with Apparent Ridges", &ridgesOn);
+        ImGui::RadioButton("Line Drawing with Apparent Ridges", &renderModeSelect, 0);
+        ImGui::RadioButton("Curvature Heatmap", &renderModeSelect, 1);
+        ImGui::RadioButton("Diffuse", &renderModeSelect, 2);
+        ImGui::RadioButton("View Dependent Curvature", &renderModeSelect, 3);
+
         ImGui::Checkbox("Principal Directions", &PDsOn);
+        //ImGui::Checkbox("View Dependent Curvature Direction", &viewDepPDOn);
         ImGui::Checkbox("Draw Faded Lines", &drawFaded);
         ImGui::Checkbox("Cull Apparent Ridges", &apparentCullFaces);
         ImGui::Checkbox("Transparent", &transparent);
         
         ImGui::Text("Click + drag to move model. Ctrl + click + drag to move light source. Scroll to zoom.");
-        const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain", "Nefertiti","Cow","Car"};
+        const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain", "Nefertiti","Cow","Torus","Knot","Tire" };
         static int currentlistboxItem = 0;
         ImGui::ListBox("Model", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
@@ -191,8 +209,8 @@ int main()
         //ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
-        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 3.0f);
-        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.3f);
+        ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 5.0f);
+        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.4f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
         ImGui::ColorEdit3("Background Color", (float*)&background, misc_flags);
@@ -201,8 +219,11 @@ int main()
         ImGui::End();
 
 
-        if (ridgesOn) { currentShader = &apparentRidges; currentModel->apparentRidges = true; }
-        else { currentShader = &diffuse; currentModel->apparentRidges = false;}
+        if (renderModeSelect == 0) { currentShader = &apparentRidges; currentModel->apparentRidges = true; }
+        else if(renderModeSelect == 1) { currentShader = &curvHeat; currentModel->apparentRidges = false; }
+        else if(renderModeSelect == 2) { currentShader = &diffuse; currentModel->apparentRidges = false;}
+		else if(renderModeSelect == 3) { currentShader = &visualizeViewDep; currentModel->apparentRidges = true; }
+        
 
         glUseProgram(*currentShader);
 
@@ -224,12 +245,13 @@ int main()
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
         currentModel->modelMatrix = model;
+        currentModel->viewPos = cameraPos;
 
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "model"), 1, GL_FALSE, &model[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "view"), 1, GL_FALSE, &view[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
         glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
-        if (ridgesOn) {
+        if (renderModeSelect==0 || renderModeSelect ==3) {
             if (!transparent) {
             //render base model
             glUseProgram(base);
@@ -243,26 +265,28 @@ int main()
             //render apparent ridges
             currentModel->apparentRidges = true;
             glUseProgram(currentModel->viewDepCurvatureCompute);
-            glUniform3f(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
+            //glUniform3f(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
             //glUniformMatrix4fv(glGetUniformLocation(currentModel->viewDepCurvatureCompute, "model"), 1, GL_FALSE, &model[0][0]);
             
             glUseProgram(currentModel->Dt1q1Compute);
             glUniform3f(glGetUniformLocation(currentModel->Dt1q1Compute, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
             //glUniformMatrix4fv(glGetUniformLocation(currentModel->Dt1q1Compute, "model"), 1, GL_FALSE, &model[0][0]);
             
-            glUseProgram(apparentRidges);
+            glUseProgram(*currentShader);
             //threshold is scaled to the reciprocal of feature size
             
             //if (currentModel->minDistance>1.0f)
                 //glUniform1f(glGetUniformLocation(apparentRidges,"threshold"),0.2f*thresholdScale/(currentModel->minDistance));
-                glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), 0.02f * thresholdScale / (currentModel->minDistance * currentModel->minDistance));
+                glUniform1f(glGetUniformLocation(*currentShader, "threshold"), 0.02f * thresholdScale / (currentModel->minDistance * currentModel->minDistance));
+
+                //glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), std::numeric_limits<float>::lowest());
             //else
               //  glUniform1f(glGetUniformLocation(apparentRidges, "threshold"), 3.0f * thresholdScale * currentModel->minDistance);
 
-            glUniform3f(glGetUniformLocation(apparentRidges,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
-            glUniform3f(glGetUniformLocation(apparentRidges, "backgroundColor"), background.x, background.y, background.z);
-            glUniform1i(glGetUniformLocation(apparentRidges, "drawFaded"), drawFaded);
-            glUniform1i(glGetUniformLocation(apparentRidges, "cull"), apparentCullFaces);
+            glUniform3f(glGetUniformLocation(*currentShader,"lineColor"), lineColor.x,lineColor.y,lineColor.z);
+            glUniform3f(glGetUniformLocation(*currentShader, "backgroundColor"), background.x, background.y, background.z);
+            glUniform1i(glGetUniformLocation(*currentShader, "drawFaded"), drawFaded);
+            glUniform1i(glGetUniformLocation(*currentShader, "cull"), apparentCullFaces);
 
             currentModel->apparentRidges = false;
         }
@@ -288,6 +312,18 @@ int main()
             
             currentModel->render(minPDShader);
             glLineWidth(lineWidth);
+        }
+        if (viewDepPDOn) {
+        /*
+            glUseProgram(viewDepPDShader);
+            glUniform1f(glGetUniformLocation(viewDepPDShader, "magnitude"), 0.01f * PDLengthScale * scrollModel[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(viewDepPDShader, "model"), 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(viewDepPDShader, "view"), 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(viewDepPDShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+            glUniform1ui(glGetUniformLocation(viewDepPDShader, "size"), currentModel->vertices.size());
+
+            currentModel->render(viewDepPDShader);
+        */
         }
 
         currentModel->render(*currentShader);
@@ -317,6 +353,9 @@ void framebufferSizeCallback(GLFWwindow* window, int width, int height)
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
+float xVelocity = 0.0f;
+float yVelocity = 0.0f;
+const float friction = 0.95f;
 void mouseCallback(GLFWwindow* window, double xpos, double ypos) {
     //return if using IMGUI
     if (ImGui::GetIO().WantCaptureMouse) {
@@ -336,15 +375,32 @@ void mouseCallback(GLFWwindow* window, double xpos, double ypos) {
     int state = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT);
     if (state == GLFW_PRESS)
     {
+        xVelocity = 0.0025f * static_cast<float>(dx);
+        yVelocity = 0.0025f * static_cast<float>(dy);
         //rotation
+        /*
         glm::quat rotY = glm::angleAxis(0.0025f * static_cast<float>(dy), cameraRight);
         glm::quat rotX = glm::angleAxis(0.0025f * static_cast<float>(dx), cameraUp);
         glm::quat rotation = rotX * rotY;
 
         //!!! mouseRotation *= glm::mat4_cast(rotation) ; -> mouseRotation = mouseRotation*glm::mat4_cast(rotation); which will cause rotations to apply in model space!!!
         mouseRotation = glm::mat4_cast(rotation) * mouseRotation;
-        //Next time I'll add a camera class.
+        */
     }
+    xVelocity *= friction;
+    yVelocity *= friction;
+
+    if (std::abs(xVelocity) > 0.001f || std::abs(yVelocity) > 0.001f) {
+        //glm::quat rotY = glm::angleAxis(xVelocity, cameraRight);
+        glm::quat rotY = glm::angleAxis(yVelocity, cameraRight);
+        //glm::quat rotX = glm::angleAxis(yVelocity, cameraUp);
+        glm::quat rotX = glm::angleAxis(xVelocity, cameraUp);
+        glm::quat rotation = rotX * rotY;
+
+        mouseRotation = glm::mat4_cast(rotation) * mouseRotation;
+    }
+
+    //Next time I'll add a camera class.
 }
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     if (ImGui::GetIO().WantCaptureMouse) {
