@@ -66,9 +66,11 @@ public:
 	std::vector<GLfloat> maxCurvs;
 	std::vector<GLfloat> minCurvs;
 
-	std::vector<float> q1s;
+	std::vector<GLfloat> q1s;
 	std::vector<glm::vec2> t1s;
-	std::vector<float> Dt1q1s;
+	std::vector<GLfloat> Dt1q1s;
+	//std::vector<GLdouble> Dt1q1s;
+
 	std::vector<vec3> worldt1s;
 
 
@@ -97,11 +99,12 @@ public:
 	Model(std::string path) {
 		this->path = path;
 		if (!this->loadAssimp()) { std::cout << "Model at " << path << " not loaded!\n"; };
+		this->combineIdenticalVertices();
 		this->boundingBox();
 		this->minDistance = this->getMinDistance();
 		this->size = this->vertices.size();
-		this->computeCurvatures();
 		this->findAdjacentFaces();
+		this->computeCurvatures();
 		this->setup();
 	}
 	void setup() {
@@ -204,14 +207,6 @@ public:
 		//adjacent faces
 
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
-		glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(glm::vec4), adjacentFaces.data());
-		for (int dbg = 0; dbg < 1; dbg++) {
-			std::cout << "Adjacent to " << dbg << " : ";
-			for (int j = 0; j < 10; j++) {
-				std::cout << adjacentFaces[dbg][2 * j] << ", " << adjacentFaces[dbg][2 * j + 1] << ". ";
-			}
-			std::cout << "\n";
-		}
 
 		q1s.resize(this->numVertices, 0.0f);
 		glGenBuffers(1, &q1Buffer);
@@ -393,6 +388,7 @@ public:
 				t1s.resize(numVertices, glm::vec2(0.0f));
 #pragma omp parallel for
 				for (size_t i=0; i < numVertices; i++) {
+					//q1 t1
 					vec3 position = vec3(modelMatrix * vec4(vertices[i], 1.0f));
 					vec3 viewDir = normalize(viewPos - position);
 					vec3 normal = normalize(glm::transpose(glm::inverse(glm::mat3(modelMatrix))) * normals[i]);
@@ -426,14 +422,14 @@ public:
 					q1s[i] = q1;
 					t1s[i] = t1;
 					//Dt1q1
-					float ndotv = dot(viewDir, normal);
+					float ndotv = normalDotView;
 					vec3 world_t1 = t1[0] * maxPD + t1[1] * minPD;
 					vec3 world_t2 = normalize(cross(normal, world_t1));
 
 					float v0_dot_t2 = dot(position, world_t2);
 					float Dt1q1 = 0.0;
 					int n = 0;
-					for (int j = 0; j < 10; j++) {
+					for (size_t j = 0; j < 10; j++) {
 						int v1id = adjacentFaces[i][2 * j];
 						int v2id = adjacentFaces[i][2 * j + 1];
 						if (v1id < 0 || v2id < 0) break;
@@ -443,6 +439,7 @@ public:
 						//find point p between v1 and v2 by linear interpolation
 						//v0 is along t1, perp to t2
 						// p = w1*v1 + w2*v2, where w2 = 1-w1
+						// projections on t2 along v0, we only get a max of two
 						float v1_dot_t2 = dot(v1, world_t2);
 						float v2_dot_t2 = dot(v2, world_t2);
 						float w1;
@@ -461,8 +458,6 @@ public:
 						
 						Dt1q1 += (interpViewDepCurv - q1) / projDistance;
 						n++;
-						
-
 					}
 					if (n != 0) Dt1q1 /= float(n);
 					/*
@@ -526,14 +521,7 @@ public:
 		this->diagonalLength = glm::length(glm::vec3(maxX - minX, maxY - minY, maxZ - minZ));
 		this->modelScaleFactor = 1.0f / diagonalLength;
 	}
-	float getMinDistance() {
-		float minDist = glm::length(vertices[0] - vertices[1]);
-		for (int i = 2; i < vertices.size(); i++) {
-			float dis = glm::length(vertices[i] - vertices[0]);
-			if (dis < minDist && dis>0.0f) minDist = dis;
-		}
-		return minDist;
-	}
+
 	//Calculates principal curvatures and principal directions per vertex
 	//Computed per face -> per vertex in two steps
 	void computeCurvatures() {
@@ -868,7 +856,7 @@ public:
 				//-
 				//compute principal directions and curvatures with the curvature tensor (2FF) by eigens
 				//Usually on computers eigenvectors / eigen  values are calculated with iterative QR decomposition 
-				// As the 2ff matrix is symmetric, it always has a full set of real eigenvectors/eigenvalues.
+				// As the 2ff matrix is symmetric, it always  has a full set of real eigenvectors/eigenvalues.
 				float c = 1, s = 0, tt = 0;
 				if (curv12s[v] != 0.0f) {
 					// Jacobi rotation to diagonalize and get eigens -> Rather use QR
@@ -894,8 +882,21 @@ public:
 
 				pd1[v] = glm::normalize(pd1[v]);
 				pd2[v] = glm::normalize(pd2[v]);
-
+				//if (dot(pd1[v], vec3(1.0f,0.0f,0.0f)) < 0) pd1[v] = -pd1[v];
+				//if (dot(pd2[v], vec3(0.0f, 1.0f, 0.0f)) < 0) pd2[v] = -pd2[v];
 			}//end of for loop per vertex
+			//align
+			/*
+			*/
+#pragma omp parallel for
+			for (size_t v = 0; v < numVertices; v++) {
+				for (size_t j = 0; j < 20;j++) {
+					int v1id = adjacentFaces[v][j];
+					if (v1id < 0) break;
+					if (dot(pd1[v], pd1[v1id]) < 0) pd1[v1id] = -pd1[v1id];
+					if (dot(pd2[v], pd2[v1id]) < 0) pd2[v1id] = -pd2[v1id];
+				}
+			}
 
 			auto end = std::chrono::high_resolution_clock::now();
 			std::chrono::duration<double> elapsed_seconds = end - start;
@@ -941,15 +942,15 @@ public:
 		glDeleteBuffers(1, &indexStorageBuffer);
 		*/
 	}
-
 	//Finds adjacent vertices for each vertex
 	void findAdjacentFaces() {
+		if (adjacentFaces.size() != 0) return;
 		auto start = std::chrono::high_resolution_clock::now();
 		this->adjacentFaces.resize(vertices.size()); //adjacentFaces<std::array<int, 20>
 		for (size_t i = 0; i < numVertices; i++) { adjacentFaces[i].fill(-1); }
 		//#pragma omp parallel for
 		for (size_t i = 0; i < numFaces; i++) { //loop each face
-			int vertexIds[3] = { this->indices[3 * i],this->indices[3 * i + 1] ,this->indices[3 * i + 2] };
+			size_t vertexIds[3] = { this->indices[3 * i],this->indices[3 * i + 1] ,this->indices[3 * i + 2] };
 			for (size_t j = 0; j < 3; j++) { //loop each vertex on the face
 				for (size_t k = 0; k < 10; k++) {
 					if (this->adjacentFaces[vertexIds[j]][2 * k] < 0) {
@@ -964,25 +965,19 @@ public:
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, adjacentFacesBuffer);
 		glBufferData(GL_SHADER_STORAGE_BUFFER, adjacentFaces.size() * sizeof(int) * 20, adjacentFaces.data(), GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 20, adjacentFacesBuffer);
-		/*
-		//Computing this on the cpu is rather slow so I made a shader for it.
-		GLuint adjacentFacesCompute = loadComputeShader(".\\shaders\\adjacentFaces.comp");
-		glUseProgram(adjacentFacesCompute);
-		glUniform1ui(glGetUniformLocation(adjacentFacesCompute, "indicesSize"), this->numIndices);
-		glDispatchCompute(glm::ceil((GLfloat(this->numIndices) / 3.0f) / float(workGroupSize)), 1, 1); //per face
-		glMemoryBarrier(GL_ALL_BARRIER_BITS);
-		*/
+
 		auto end = std::chrono::high_resolution_clock::now();
 		std::chrono::duration<double> elapsed_seconds = end - start;
 		std::cout << "Adjacent faces calculated. Took : " << elapsed_seconds.count() << " seconds. \n";
 
-		//glGetNamedBufferSubData(adjacentFacesBuffer, 0, adjacentFaces.size() * sizeof(GLfloat), adjacentFaces.data());
-		/*
+		std::vector< std::array<unsigned int, 20>> cmpAdj; cmpAdj.resize(adjacentFaces.size());
+		glGetNamedBufferSubData(adjacentFacesBuffer, 0, cmpAdj.size() * sizeof(GLint) * 20, cmpAdj.data());
 		std::cout << "First vertex's adjacent vertices : ";
 		for (int j = 0; j < 10; j++) {
 			std::cout << this->adjacentFaces[0][2 * j] << ", " << this->adjacentFaces[0][2 * j + 1] << ". ";
 		}
 		std::cout << "\n";
+		/*
 		*/
 	}
 	//Calculates pseudo-"Voronoi" area for each vertex
@@ -1201,8 +1196,8 @@ public:
 
 		std::cout << "\nLoading file : " << this->path << ".\n";
 		//aiProcess_Triangulate !!!
-		const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_GenSmoothNormals | aiProcess_JoinIdenticalVertices | aiProcess_OptimizeMeshes /*| aiProcess_CalcTangentSpace | aiProcess_GenUVCoords*/); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
-		if (!scene) {
+		const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenSmoothNormals | aiProcess_OptimizeMeshes | aiProcess_FixInfacingNormals /*| aiProcess_CalcTangentSpace | aiProcess_GenUVCoords*/); //aiProcess_JoinIdenticalVertices | aiProcess_SortByPType);
+		if (!scene) { //| aiProcess_JoinIdenticalVertices
 			fprintf(stderr, importer.GetErrorString());
 			return false;
 		}
@@ -1271,7 +1266,10 @@ public:
 		this->numFaces = this->faces.size();
 		this->numIndices = this->indices.size();
 
-		//Scale model for regular sizing
+
+		constexpr bool scaleDist = false;
+		//Scale model for regular edge length
+		if (scaleDist) {
 		while (this->getMinDistance() < 0.1f) {
 #pragma omp parallel for
 			for (size_t i = 0; i < this->vertices.size(); i++) {
@@ -1284,15 +1282,61 @@ public:
 				this->vertices[i] *= 0.1f;
 			}
 		}
+		}
 
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
+	}	
+	void combineIdenticalVertices() {
+		auto startTime = std::chrono::high_resolution_clock::now();
+		cout << "Combining identical vertices...\n";
+		for (size_t i = 0; i < this->numVertices; i++) {
+			vec3 v0 = vertices[i];
+			for (size_t j = 0; j < this->numVertices; ) {
+				if (i == j) { j++; continue; }
+				vec3 v1 = vertices[j];
+				//if identical vertex
+				if (glm::distance(v0, v1) < 1.0e-5) {
+#pragma omp parallel for
+					for (size_t ind = 0; ind < this->numIndices; ind++) {
+						if (indices[ind] == j) indices[ind] = i;
+						//updated indices
+						if (indices[ind] > j) indices[ind]--;
+					}
+					//didn't do faces because I'm not using them
+					this->vertices.erase(this->vertices.begin() + j);
+					this->normals.erase(this->normals.begin() + j);
+					this->textureCoordinates.erase(this->textureCoordinates.begin() + j);
+					this->numVertices = this->vertices.size();
+					this->numNormals = this->normals.size();
+				}
+				else {
+					//increment only on not hit. If we hit, we need to work with the new current j again.
+					j++;
+				}
+			}
+		}
+		//time
+		auto end = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double> elapsed_seconds = end - startTime;
+		cout << "Combined identical vertices. Took "<< elapsed_seconds.count() <<" seconds.\n";
+		return;
 	}
-	static int getOMPMaxThreads() {
-		//only runs once
-		static int maxThreads = omp_get_max_threads();
-		cout << "Max OMP threads : "<<maxThreads<<".\n";
-		return maxThreads;
+
+	float avgEdgeLength() {
+#pragma omp parallel for
+		for (size_t i = 0; i < numVertices; i++) {
+			;
+		}
+		//if (this->adjacentFaces.size() == 0)this->findAdjacentFaces();
+	}
+	float getMinDistance() {
+		float minDist = glm::length(vertices[0] - vertices[1]);
+		for (int i = 2; i < vertices.size(); i++) {
+			float dis = glm::length(vertices[i] - vertices[0]);
+			if (dis < minDist && dis>0.0f) minDist = dis;
+		}
+		return minDist;
 	}
 	bool rebindSSBOs() {
 
@@ -1310,8 +1354,14 @@ public:
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 31, cornerAreaBuffer);
 		glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 42, dumpBuffer);
 		return true;
+	}	  
+	static int getOMPMaxThreads() {
+		//only runs once
+		static int maxThreads = omp_get_max_threads();
+		cout << "Max OMP threads : " << maxThreads << ".\n";
+		return maxThreads;
 	}
-
+	
 	//destructor
 	//I should also be using smart pointers for the meshes / models
 	//Smart pointers should NOT be in another smart pointer.

@@ -37,6 +37,7 @@ glm::vec3 background(30.0 / 255, 30.0 / 255, 30.0 / 255);
 glm::vec3 lineColor(1.0f);
 
 bool PDsOn = false;
+bool normalsOn = false;
 bool viewDepPDOn = false;
 bool drawFaded = true;
 bool apparentCullFaces = false;
@@ -120,12 +121,14 @@ int main()
     std::vector<Model> models;
     //order causes no bugs
 
-    //models.push_back(Model(".\\models\\quadDavid.obj"));
-    models.push_back(Model(".\\models\\stanford-bunny.obj"));
+    models.push_back(Model(".\\models\\quadDavid.obj"));
+    //models.push_back(Model(".\\models\\stanford-bunny.obj"));
     /*
     models.push_back(Model(".\\models\\max-planck.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
+    */
     models.push_back(Model(".\\models\\rapid.obj"));
+    /*
     models.push_back(Model(".\\models\\brain.obj"));
     models.push_back(Model(".\\models\\Nefertiti.obj"));
     models.push_back(Model(".\\models\\cow.obj"));
@@ -134,7 +137,8 @@ int main()
    
     models.push_back(Model(".\\models\\torus.obj"));
     models.push_back(Model(".\\models\\knot.obj"));
-    models.push_back(Model(".\\models\\horse.obj"));
+    //models.push_back(Model(".\\models\\horse.obj"));
+    models.push_back(Model(".\\models\\cow.obj"));
 
     Model* currentModel = &models[0];
 
@@ -147,7 +151,8 @@ int main()
     GLuint minPDShader = loadShader(".\\shaders\\PDmin.vert",".\\shaders\\PDmin.frag",".\\shaders\\PDmin.geom");
     GLuint curvHeat = loadShader(".\\shaders\\curvatureHeat.vert", ".\\shaders\\curvatureHeat.frag");
     GLuint visualizeViewDep = loadShader(".\\shaders\\visualizeViewDep.vert", ".\\shaders\\visualizeViewDep.frag", ".\\shaders\\visualizeViewDep.geom");
-
+    GLuint visualizeDt1q1 = loadShader(".\\shaders\\visualizeDt1q1.vert", ".\\shaders\\visualizeDt1q1.frag", ".\\shaders\\visualizeDt1q1.geom");
+    GLuint normalsShader = loadShader(".\\shaders\\normals.vert", ".\\shaders\\normals.frag", ".\\shaders\\normals.geom");
 
 
     //GLuint* currentShader = &apparantRidges;
@@ -188,17 +193,27 @@ int main()
         //IMGui window
         ImGui::Begin("Apparent Ridges");
 
+        ImGui::Columns(2, nullptr, false);
+
         ImGui::RadioButton("Line Drawing with Apparent Ridges", &renderModeSelect, 0);
         ImGui::RadioButton("Curvature Heatmap", &renderModeSelect, 1);
         ImGui::RadioButton("Diffuse", &renderModeSelect, 2);
-        ImGui::RadioButton("View Dependent Curvature", &renderModeSelect, 3);
 
-        ImGui::Checkbox("Principal Directions", &PDsOn);
-        //ImGui::Checkbox("View Dependent Curvature Direction", &viewDepPDOn);
+        ImGui::NextColumn();
+        ImGui::RadioButton("View Dependent Curvature", &renderModeSelect, 3);
+        ImGui::RadioButton("Derivative of View Dependent Curvature", &renderModeSelect, 4);
+        
+        ImGui::NextColumn();
         ImGui::Checkbox("Draw Faded Lines", &drawFaded);
         ImGui::Checkbox("Cull Apparent Ridges", &apparentCullFaces);
         ImGui::Checkbox("Transparent", &transparent);
-        
+
+        ImGui::NextColumn();
+        ImGui::Checkbox("Principal Directions", &PDsOn);
+        ImGui::Checkbox("Normals", &normalsOn);
+        //ImGui::Checkbox("View Dependent Curvature Direction", &viewDepPDOn);
+
+        ImGui::Columns(1);
         ImGui::Text("Click + drag to move model. Ctrl + click + drag to move light source. Scroll to zoom.");
         const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain", "Nefertiti","Cow","Torus","Knot","Tire" };
         static int currentlistboxItem = 0;
@@ -210,7 +225,7 @@ int main()
         ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 5.0f);
-        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.4f);
+        ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.8f);
         ImGuiColorEditFlags misc_flags = (0 | ImGuiColorEditFlags_NoDragDrop | 0 | ImGuiColorEditFlags_NoOptions);
         ImGui::ColorEdit3("Line Color", (float*)&lineColor, misc_flags);
         ImGui::ColorEdit3("Background Color", (float*)&background, misc_flags);
@@ -223,6 +238,7 @@ int main()
         else if(renderModeSelect == 1) { currentShader = &curvHeat; currentModel->apparentRidges = false; }
         else if(renderModeSelect == 2) { currentShader = &diffuse; currentModel->apparentRidges = false;}
 		else if(renderModeSelect == 3) { currentShader = &visualizeViewDep; currentModel->apparentRidges = true; }
+        else if(renderModeSelect == 4) { currentShader = &visualizeDt1q1; currentModel->apparentRidges = true; }
         
 
         glUseProgram(*currentShader);
@@ -236,7 +252,7 @@ int main()
         
         //opengl matrice transforms are applied from the right side first. (last first)
         glm::mat4 model = glm::mat4(1);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -1.0f)); //move in world space
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, -1.5f)); //move in world space
         model *= scrollModel ; //scale
         model = glm::scale(model, glm::vec3(currentModel->modelScaleFactor) );
         model = model*mouseRotation ;
@@ -251,7 +267,7 @@ int main()
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "view"), 1, GL_FALSE, &view[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(*currentShader, "projection"), 1, GL_FALSE, &projection[0][0]);
         glUniform3f(glGetUniformLocation(*currentShader, "viewPosition"), cameraPos.x, cameraPos.y, cameraPos.z);
-        if (renderModeSelect==0 || renderModeSelect ==3) {
+        if (renderModeSelect==0 || renderModeSelect ==3 || renderModeSelect ==4) {
             if (!transparent) {
             //render base model
             glUseProgram(base);
@@ -311,6 +327,28 @@ int main()
             glUniform1ui(glGetUniformLocation(minPDShader, "size"), currentModel->vertices.size());
             
             currentModel->render(minPDShader);
+            glLineWidth(lineWidth);
+        }
+        if (normalsOn) {
+            glLineWidth(2);
+            //Render Principal Directions
+            glUseProgram(normalsShader);
+            glUniform1f(glGetUniformLocation(normalsShader, "magnitude"), 0.015f * PDLengthScale * scrollModel[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "model"), 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "view"), 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+            glUniform1ui(glGetUniformLocation(normalsShader, "size"), currentModel->vertices.size());
+
+            currentModel->render(normalsShader);
+
+            glUseProgram(normalsShader);
+            glUniform1f(glGetUniformLocation(normalsShader, "magnitude"), 0.015f * PDLengthScale * scrollModel[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "model"), 1, GL_FALSE, &model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "view"), 1, GL_FALSE, &view[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(normalsShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+            glUniform1ui(glGetUniformLocation(normalsShader, "size"), currentModel->vertices.size());
+
+            currentModel->render(normalsShader);
             glLineWidth(lineWidth);
         }
         if (viewDepPDOn) {

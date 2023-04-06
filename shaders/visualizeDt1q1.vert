@@ -41,6 +41,7 @@ out VertexData{
     float q1;
     vec2 t1;
     float Dt1q1;
+    uint id;
 } vertexOut;
 
 uniform mat4 model;
@@ -78,6 +79,7 @@ void main() {
     vertexOut.t1 = t1s[gl_VertexID];
     vertexOut.Dt1q1 = Dt1q1s[gl_VertexID];
 
+    vertexOut.id = gl_VertexID;
     /*
     if(gl_VertexID%10==0)dump[gl_VertexID] =vertexOut.q1;
     else if(gl_VertexID%10==1)dump[gl_VertexID] = vertexOut.q1;

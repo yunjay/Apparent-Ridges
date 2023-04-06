@@ -83,7 +83,7 @@ void main(){
     // sec = 1/cos
     //Q = S * P^-1
     //  = S + (sec theta - 1) * S * w * w^T
-    if(abs(normalDotView)<epsilon) normalDotView = epsilon * sign(normalDotView);
+    //if(abs(normalDotView)<epsilon) normalDotView = epsilon * sign(normalDotView);
     
     float sec_min1 = 1.0 / abs(normalDotView) - 1.0;
     float Q11 = maxCurv * (1.0 + sec_min1 * u2*csc2);
@@ -102,26 +102,33 @@ void main(){
     //q1 : max view-dep curvature, t1 = max view-dep curvature direction
     float q1 = 0.5 * (QTQ1 + QTQ2);
     if(q1 > 0.0)
-        q1 += sqrt(abs(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1)));
+        q1 += sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
     else
-        q1 -= sqrt(abs(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1)));
+        q1 -= sqrt(QTQ12*QTQ12 + 0.25 * (QTQ2-QTQ1)*(QTQ2-QTQ1));
     
 
     vec2 t1 = vec2(QTQ2-q1,-QTQ12);
-    if(length(t1)<epsilon)t1=vec2(1,0);
     t1=normalize(t1);
+
+    //unify orientation
+    //if(dot(t1[0]*maxPD,maxPD)<0.0) t1 = -t1;
     
-    //if(abs(q1)> MAX_FLOAT/ 64.0) q1 = MAX_FLOAT/ 64.0 * sign(q1);
-    //if(abs(q1)< SMALLEST_FLOAT* 64.0) q1 = SMALLEST_FLOAT* 64.0 * sign(q1);
+    if(abs(q1)> MAX_FLOAT/ 64.0) q1 = MAX_FLOAT/ 64.0 * sign(q1);
+    if(abs(q1)< SMALLEST_FLOAT* 64.0) q1 = SMALLEST_FLOAT* 64.0 * sign(q1);
     
+    //if(dot(t1[0]*maxPD+t1[1]*minPD,maxPD)<0.0) t1 = -t1;
+    
+
     q1s[id] = q1;
-    
     t1s[id] = t1;
     
     //debug zone
     //q1s[id] = csc2;
-    //q1s[id] = u;
-      
+    /*
+    vec3 worldt1 = vec3(t1[0]*maxPD + t1[1]*minPD);
+    q1s[id] = dot(worldt1,maxPD);
+    q1s[id] = length(worldt1);
+    */    
 
 /*
     dump[id] = viewPosition.z; //no issues

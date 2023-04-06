@@ -21,6 +21,7 @@ in VertexData{
     float q1;
     vec2 t1;
     float Dt1q1;
+    uint id;
 } geometryIn[]; //instance name can be different from vertex shader stage
 //gl_in[] for gl_PerVertex which carries gl_Position (Built in)
 //geometryIn[] for the output we made
@@ -34,7 +35,7 @@ uniform mat4 view;
 
 const float epsilon = 1e-6;
 
-out float fade;
+flat out float fade;
 
 //emit two vertices for each line...
 void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
@@ -147,11 +148,40 @@ void main() {
     bool zeroCross12 = (dot(tmax1,tmax2) <= 0.0);
     bool zeroCross20 = (dot(tmax2,tmax0) <= 0.0);
     
-    if (int(zeroCross01) + int(zeroCross12) + int(zeroCross20) < 2) return;
+    //if (int(zeroCross01) + int(zeroCross12) + int(zeroCross20) < 2) return;
     
+    //debug
+    /*
+    gl_Position = projection * view *vec4( geometryIn[0].pos,1.0);
+    fade = geometryIn[0].q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[1].pos,1.0);
+    fade = geometryIn[1].q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[2].pos,1.0);
+    fade = geometryIn[2].q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[0].pos,1.0);
+    fade = geometryIn[0].q1;
+    EmitVertex();
+    EndPrimitive();
+    
+    */
+    gl_Position = projection * view *vec4( geometryIn[0].pos,1.0);
+    fade = geometryIn[0].Dt1q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[1].pos,1.0);
+    fade = geometryIn[1].Dt1q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[2].pos,1.0);
+    fade = geometryIn[2].Dt1q1;
+    EmitVertex();
+    gl_Position = projection * view *vec4( geometryIn[0].pos,1.0);
+    fade = geometryIn[0].Dt1q1;
+    EmitVertex();
+    EndPrimitive();
     //Draw lines
     /*
-   */
     if (!zeroCross01) {
       drawApparentRidgeSegment(1, 2, 0,
                     emax1, emax2, emax0,
@@ -188,5 +218,6 @@ void main() {
                    tmax0, tmax1, tmax2,
                    true, true);
    }
+   */
 }
 

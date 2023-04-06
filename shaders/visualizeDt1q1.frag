@@ -1,6 +1,6 @@
 #version 460
 out vec4 color;
-in float fade;
+flat in float fade;
 uniform vec3 backgroundColor;
 uniform vec3 lineColor;
 void main(){
