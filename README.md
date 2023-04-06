@@ -1,5 +1,5 @@
 # ApparentRidges
-![Planck](https://user-images.githubusercontent.com/38942504/230310738-0827be6b-e24e-434a-87b2-0207a9e5224c.png)
+![Planck](images/planck.png)
 
 Implementation of [Apparent Ridges for Line Drawings](https://people.csail.mit.edu/tjudd/apparentridges.html).
 
@@ -46,7 +46,9 @@ Local maxima occur when the derivative equals to zero, and crosses from positive
 
 - Visualizations of mesh normals and principal curvature directions.
 ![PDs](/images/pds.gif)
-- Manipulation 
+
+- Manipulation of apparent ridges threshold of local maxima of view-dependent curavature.
+![Threshold](/images/thresh.gif)
 
 ## Dependencies
 
