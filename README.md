@@ -1,10 +1,9 @@
 # ApparentRidges
-![Screenshot 2023-04-06 16-40-37](https://user-images.githubusercontent.com/38942504/230310516-2d96ae49-0510-40ef-8d2d-d2140ef6c69c.png)
+![Screenshot 2023-04-06 16-51-30](https://user-images.githubusercontent.com/38942504/230310738-0827be6b-e24e-434a-87b2-0207a9e5224c.png)
+
 Implementation of [Apparent Ridges for Line Drawings](https://people.csail.mit.edu/tjudd/apparentridges.html).
 
 Implemented in OpenGL with C++, using OpenGL compute shaders for computations on the GPU.
-
-![]()
 
 *Apparent Ridges for Line Drawings* presents an effective method line drawing rendering of meshes while effectively conveying mesh topology through drawing *apparent ridges*.
 
@@ -30,11 +29,28 @@ Using the method from *Estimating Curvatures and Their Derivatives on Triangle M
 
 We want to capture the *shortening* of the mesh due to surface orientation to our perspective in relation with our curvature estimation. To do this we define the ** *view-dependent curvature operator* ** $Q$ on a point $m$ on the screen, when $m$ is the point on the mesh before it is projected.
 
-Using similar methods as to how we estimated the curvature operator above, we can estimate the matrix $Q$
+With similar methods as to how we estimated the curvature operator above, we can estimate the matrix $Q$ over each vertex in realtime, and compute estimations for the max view-dependent curvature and its direction on each point on the mesh.
+
+Then, we estimate the directional derivative of the view-dependent curvature of each vertex in the max view-dependent curvature direction, over each vertex's one-ring neighborhood.
 
 ### Apparent Ridges
 
-### Implementation on Meshes
+Apparent ridges are defined as "the loci of points at which maximum view-dependent curvature assumes a local maximum in the view-dependent maximum principal direction". 
+
+Local maxima occur when the derivative equals to zero, and crosses from positive to negative.
+
+![q1](https://user-images.githubusercontent.com/38942504/230313421-c602be56-a10d-4d08-8859-c98fc4dadf30.gif)
+![heatmap](https://user-images.githubusercontent.com/38942504/230313427-dac106e7-4532-4892-a185-5402ae8bd4b3.gif)
+
+## Dependencies
+
+Written in C++ using OpenGL4 and GLFW3.
+
+Used [ImGui](https://github.com/ocornut/imgui) for interface purposes.
+
+Used [Assimp](https://github.com/assimp/assimp) for loading 3D models.
+
+Built using [vcpkg](https://github.com/microsoft/vcpkg) on Windows.
 
 ## References
 
@@ -45,5 +61,3 @@ Using similar methods as to how we estimated the curvature operator above, we ca
 [RTSC](https://rtsc.cs.princeton.edu/)
 
 [TriMesh2](https://gfx.cs.princeton.edu/proj/trimesh2/)
-
-
