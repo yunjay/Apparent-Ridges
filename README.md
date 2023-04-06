@@ -1,5 +1,5 @@
 # ApparentRidges
-![Screenshot 2023-04-06 16-51-30](https://user-images.githubusercontent.com/38942504/230310738-0827be6b-e24e-434a-87b2-0207a9e5224c.png)
+![Planck](https://user-images.githubusercontent.com/38942504/230310738-0827be6b-e24e-434a-87b2-0207a9e5224c.png)
 
 Implementation of [Apparent Ridges for Line Drawings](https://people.csail.mit.edu/tjudd/apparentridges.html).
 
@@ -45,7 +45,7 @@ Local maxima occur when the derivative equals to zero, and crosses from positive
 ![heatmap](https://user-images.githubusercontent.com/38942504/230313427-dac106e7-4532-4892-a185-5402ae8bd4b3.gif)
 
 - Visualizations of mesh normals and principal curvature directions.
-![PDs](./images/pds.gif)
+![PDs](/images/pds.gif)
 - Manipulation 
 
 ## Dependencies
