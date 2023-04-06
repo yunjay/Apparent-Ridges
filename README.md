@@ -9,6 +9,8 @@ Implemented in OpenGL with C++, using OpenGL compute shaders for computations on
 
 **Apparent ridges** are defined as the groups of points that maximize ** *view-dependent curvature* **.
 
+![Dragon](images/dragon.png)
+
 ## Method
 
 The principle question in line drawing is where the lines should be drawn to best represent and express the mesh geometry.
