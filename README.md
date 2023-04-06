@@ -39,8 +39,14 @@ Apparent ridges are defined as "the loci of points at which maximum view-depende
 
 Local maxima occur when the derivative equals to zero, and crosses from positive to negative.
 
-![q1](https://user-images.githubusercontent.com/38942504/230313421-c602be56-a10d-4d08-8859-c98fc4dadf30.gif)
+## Features
+
+- Visualizations of apparent ridges, a mean curvature heatmap, view-dependent curvature, derivative of view-dependent curvature, and plain diffuse shading.
 ![heatmap](https://user-images.githubusercontent.com/38942504/230313427-dac106e7-4532-4892-a185-5402ae8bd4b3.gif)
+
+- Visualizations of mesh normals and principal curvature directions.
+![PDs](./images/pds.gif)
+- Manipulation 
 
 ## Dependencies
 
