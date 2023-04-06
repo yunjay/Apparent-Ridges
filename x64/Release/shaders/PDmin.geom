@@ -22,8 +22,8 @@ void principalDirections(int index)
     EndPrimitive();
     */
     //min principal dir
-    //gl_Position = projection * gl_in[index].gl_Position;
-    gl_Position = projection * (gl_in[index].gl_Position - vec4(gs_in[index].minPrincipal, 0.0) * magnitude);
+    gl_Position = projection * gl_in[index].gl_Position;
+    //gl_Position = projection * (gl_in[index].gl_Position - vec4(gs_in[index].minPrincipal, 0.0) * magnitude);
     EmitVertex();
     gl_Position = projection * (gl_in[index].gl_Position + vec4(gs_in[index].minPrincipal, 0.0) * magnitude);
     EmitVertex();

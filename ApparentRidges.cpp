@@ -121,24 +121,24 @@ int main()
     std::vector<Model> models;
     //order causes no bugs
 
-    models.push_back(Model(".\\models\\quadDavid.obj"));
-    //models.push_back(Model(".\\models\\stanford-bunny.obj"));
+    //models.push_back(Model(".\\models\\quadDavid.obj"));
+    models.push_back(Model(".\\models\\stanford-bunny.obj"));
     /*
+    */
     models.push_back(Model(".\\models\\max-planck.obj"));
     models.push_back(Model(".\\models\\lucy.obj"));
-    */
     models.push_back(Model(".\\models\\rapid.obj"));
-    /*
     models.push_back(Model(".\\models\\brain.obj"));
-    models.push_back(Model(".\\models\\Nefertiti.obj"));
-    models.push_back(Model(".\\models\\cow.obj"));
+    models.push_back(Model(".\\models\\horse.obj"));
+    //models.push_back(Model(".\\models\\Nefertiti.obj"));
+    /*
     models.push_back(Model(".\\models\\Zagato.obj"));
     */
    
     models.push_back(Model(".\\models\\torus.obj"));
     models.push_back(Model(".\\models\\knot.obj"));
-    //models.push_back(Model(".\\models\\horse.obj"));
     models.push_back(Model(".\\models\\cow.obj"));
+    models.push_back(Model(".\\models\\xyzrgb_dragon.obj"));
 
     Model* currentModel = &models[0];
 
@@ -215,14 +215,11 @@ int main()
 
         ImGui::Columns(1);
         ImGui::Text("Click + drag to move model. Ctrl + click + drag to move light source. Scroll to zoom.");
-        const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain", "Nefertiti","Cow","Torus","Knot","Tire" };
+        const char* listboxItems[] = { "Bunny", "Planck","Lucy", "David", "Brain", /*"Nefertiti",*/"Horse","Torus","Knot","Cow","Dragon"};
         static int currentlistboxItem = 0;
         ImGui::ListBox("Model", &currentlistboxItem, listboxItems, IM_ARRAYSIZE(listboxItems), 3);
         currentModel = &models[currentlistboxItem];
 
-        //ImGui::SliderFloat("Rotate X", &xDegrees, 0.0f, 360.0f);
-        //ImGui::SliderFloat("Rotate Y", &yDegrees, 0.0f, 360.0f);
-        ImGui::SliderFloat("Model Size", &modelSize, 0.1f, 15.0f);
         ImGui::SliderFloat("Line Width", &lineWidth, 0.1f, 10.0f);
         ImGui::SliderFloat("Threshold", &thresholdScale, 0.0f, 5.0f);
         ImGui::SliderFloat("Principal Directions Arrow Length", &PDLengthScale, 0.0f, 0.8f);

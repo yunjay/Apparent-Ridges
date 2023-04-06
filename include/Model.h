@@ -6,6 +6,8 @@
 #include <fstream>
 #include <chrono>
 #include <algorithm>
+#include <unordered_map>
+#include <functional>
 
 #include <omp.h>
 
@@ -1288,6 +1290,7 @@ public:
 		return true;
 	}	
 	void combineIdenticalVertices() {
+		if (numVertices > 500000)return;
 		auto startTime = std::chrono::high_resolution_clock::now();
 		cout << "Combining identical vertices...\n";
 		for (size_t i = 0; i < this->numVertices; i++) {
@@ -1296,6 +1299,7 @@ public:
 				if (i == j) { j++; continue; }
 				vec3 v1 = vertices[j];
 				//if identical vertex
+				//-> Calculating distance between every vertex with O(n^2) is very slow.
 				if (glm::distance(v0, v1) < 1.0e-5) {
 #pragma omp parallel for
 					for (size_t ind = 0; ind < this->numIndices; ind++) {

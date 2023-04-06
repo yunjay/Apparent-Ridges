@@ -21,7 +21,6 @@ in VertexData{
     float q1;
     vec2 t1;
     float Dt1q1;
-    uint id;
 } geometryIn[]; //instance name can be different from vertex shader stage
 //gl_in[] for gl_PerVertex which carries gl_Position (Built in)
 //geometryIn[] for the output we made
@@ -33,7 +32,7 @@ uniform mat4 model;
 uniform mat4 projection;
 uniform mat4 view;
 
-const float epsilon = 1e-5;
+const float epsilon = 1e-6;
 
 out float fade;
 
@@ -76,6 +75,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
       return;
 
    // Test if tmax-es point *towards* the segment
+   
    if (do_test) {
       // Find the vector perpendicular to the segment (p01 <-> p12)
       vec3 perp =cross( 0.5*cross((geometryIn[v1].pos-geometryIn[v0].pos),(geometryIn[v2].pos-geometryIn[v0].pos)), p01 - p12);
@@ -85,6 +85,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
           (dot(tmax2,perp)) <= 0.0)
          return;
    }
+   
 
    // Faded lines
    if (drawFaded) {
@@ -96,7 +97,7 @@ void drawApparentRidgeSegment(const int v0,const int v1,const int v2,
 
     //Draw line segment
     //gl_Position = vec4(p01,1.0);
-    bool firstEmitted=false;
+    //bool firstEmitted=false;
     gl_Position = projection * view *vec4(p01,1.0);
     fade = k01;
     EmitVertex();
@@ -141,11 +142,16 @@ void main() {
     vec3 tmax2 = geometryIn[2].Dt1q1 * world_t1_2;
 
     //"zero crossing" if the tmaxes along an edge point in opposite directions
+    
     bool zeroCross01 = (dot(tmax0,tmax1) <= 0.0);
     bool zeroCross12 = (dot(tmax1,tmax2) <= 0.0);
     bool zeroCross20 = (dot(tmax2,tmax0) <= 0.0);
+    
     if (int(zeroCross01) + int(zeroCross12) + int(zeroCross20) < 2) return;
+    
     //Draw lines
+    /*
+   */
     if (!zeroCross01) {
       drawApparentRidgeSegment(1, 2, 0,
                     emax1, emax2, emax0,

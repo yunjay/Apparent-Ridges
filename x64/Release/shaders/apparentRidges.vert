@@ -16,16 +16,16 @@ layout(binding = 8, std430) readonly buffer curvatureBuffer{
 layout(binding = 20, std430) readonly buffer adjacentFacesBuffer{
     int adjFaces[][20];
 };
-layout(binding = 21, std430) buffer q1Buffer{
+layout(binding = 21, std430) readonly buffer q1Buffer{
     float q1s[];
 };
-layout(binding = 22, std430) buffer t1Buffer{
+layout(binding = 22, std430) readonly buffer t1Buffer{
     vec2 t1s[];
 };
-layout(binding = 23, std430) buffer Dt1q1Buffer{
+layout(binding = 23, std430) readonly buffer Dt1q1Buffer{
     float Dt1q1s[];
 };
-layout(binding=42, std430) buffer DumpBuffer{
+layout(binding=42, std430) writeonly buffer DumpBuffer{
     float dump[];
 };
 out VertexData{
@@ -41,7 +41,6 @@ out VertexData{
     float q1;
     vec2 t1;
     float Dt1q1;
-    uint id;
 } vertexOut;
 
 uniform mat4 model;
@@ -56,23 +55,21 @@ void main() {
 
     vec3 position = vec3(model * vec4(inPosition, 1.0)); 
     //position = vec3(projection * view *  model * vec4(inPosition, 1.0));
-    vec3 normal = transpose(inverse(mat3(model))) * inNormal;
+    vec3 normal = normalize(transpose(inverse(mat3(model))) * inNormal);
     
-    //I think Assimp normalizes the normals anyway.
     vec3 viewDir = normalize(viewPosition - position);
     
     float ndotv = dot(viewDir,normal);
-    
+
     vertexOut.pos = position;
     vertexOut.normal = normal;
-    vertexOut.texCoords = inTexCoords;  
     vertexOut.normalDotView = ndotv;
     vertexOut.viewDirection = viewDir;
 
     //vertexOut.maxPrincpal = normalize(mat3(model) * vec3(maxPD));
-    vertexOut.maxPrincipal = transpose(inverse(mat3(model))) * vec3(maxPD);
+    vertexOut.maxPrincipal = normalize(transpose(inverse(mat3(model))) * vec3(maxPD));
     //vertexOut.minPrincipal = normalize(mat3(model) * vec3(minPD));
-    vertexOut.minPrincipal = transpose(inverse(mat3(model))) * vec3(minPD);
+    vertexOut.minPrincipal = normalize(transpose(inverse(mat3(model))) * vec3(minPD));
     
     vertexOut.maxCurvature = maxCurv;
     vertexOut.minCurvature = minCurv;
@@ -81,7 +78,6 @@ void main() {
     vertexOut.t1 = t1s[gl_VertexID];
     vertexOut.Dt1q1 = Dt1q1s[gl_VertexID];
 
-    vertexOut.id = gl_VertexID;
     /*
     if(gl_VertexID%10==0)dump[gl_VertexID] =vertexOut.q1;
     else if(gl_VertexID%10==1)dump[gl_VertexID] = vertexOut.q1;
@@ -94,4 +90,5 @@ void main() {
 	else if(gl_VertexID%10==8)dump[gl_VertexID] = vertexOut.q1;
 	else if(gl_VertexID%10==9)dump[gl_VertexID] = vertexOut.Dt1q1;
     */
+    
 }
