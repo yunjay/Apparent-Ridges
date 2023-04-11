@@ -7,7 +7,7 @@ Implemented in OpenGL with C++, using OpenGL compute shaders for computations on
 
 *Apparent Ridges for Line Drawings* presents an effective method line drawing rendering of meshes while effectively conveying mesh topology through drawing *apparent ridges*.
 
-**Apparent ridges** are defined as the groups of points that maximize *view-dependent curvature*.
+**Apparent ridges** are defined as the groups of points that maximize ***view-dependent curvature***.
 
 <img src="images/dragon.png" alt="Dragon" width="50%" />
 
@@ -29,7 +29,7 @@ Using the method from *Estimating Curvatures and Their Derivatives on Triangle M
 
 ### View-dependent Curvature
 
-We want to capture the *shortening* of the mesh due to surface orientation to our perspective in relation with our curvature estimation. To do this we define the ** *view-dependent curvature operator* ** $Q$ on a point $m$ on the screen, when $m$ is the point on the mesh before it is projected.
+We want to capture the *shortening* of the mesh due to surface orientation to our perspective in relation with our curvature estimation. To do this we define the ***view-dependent curvature operator*** $Q$ on a point $m$ on the screen, when $m$ is the point on the mesh before it is projected.
 
 With similar methods as to how we estimated the curvature operator above, we can estimate the matrix $Q$ over each vertex in realtime, and compute estimations for the max view-dependent curvature and its direction on each point on the mesh.
 
