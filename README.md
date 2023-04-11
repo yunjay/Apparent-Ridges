@@ -7,7 +7,7 @@ Implemented in OpenGL with C++, using OpenGL compute shaders for computations on
 
 *Apparent Ridges for Line Drawings* presents an effective method line drawing rendering of meshes while effectively conveying mesh topology through drawing *apparent ridges*.
 
-**Apparent ridges** are defined as the groups of points that maximize ** *view-dependent curvature* **.
+**Apparent ridges** are defined as the groups of points that maximize *view-dependent curvature*.
 
 <img src="images/dragon.png" alt="Dragon" width="50%" />
 
