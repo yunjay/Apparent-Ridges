@@ -1289,6 +1289,7 @@ public:
 		// The "scene" pointer will be deleted automatically by "importer"
 		return true;
 	}	
+	//Needs a new implementation with hashing float to int with 0.0001 precision or whatever.
 	void combineIdenticalVertices() {
 		if (numVertices > 500000)return;
 		auto startTime = std::chrono::high_resolution_clock::now();
