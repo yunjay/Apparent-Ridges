@@ -1,9 +1,9 @@
 # ApparentRidges
 ![Planck](images/planck.png)
 
-Implementation of [Apparent Ridges for Line Drawings](https://people.csail.mit.edu/tjudd/apparentridges.html).
+Implementation of [Apparent Ridges for Line Drawings](https://people.csail.mit.edu/tjudd/apparentridges.html) done for learning purposes as a student.
 
-Implemented in OpenGL with C++, using OpenGL compute shaders for computations on the GPU.
+Implemented in OpenGL4 with C++, using compute shaders for computations on the GPU.
 
 *Apparent Ridges for Line Drawings* presents an effective method line drawing rendering of meshes while effectively conveying mesh topology through drawing *apparent ridges*.
 
